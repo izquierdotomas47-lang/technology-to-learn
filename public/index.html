@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#100736">
+    <meta name="description" content="Plataforma educativa espacial de matemáticas e inglés para grado tercero">
+    <meta name="ttl-assets-root" content="assets">
+    <title>Technology to Learn SAS</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="assets/cosmo.jpg">
+    <link rel="stylesheet" href="css/estilos.css">
+    <script>window.TTL_GOOGLE_CLIENT_ID = '860708338420-qaggph9h0vc3n9m7t1upbthkmiskjtvk.apps.googleusercontent.com';</script>
+    <script src="https://accounts.google.com/gsi/client" async defer onload="window.dispatchEvent(new Event('google-ready'))"></script>
+</head>
+<body>
+    <div class="space-bg">
+        <i></i><i></i><i></i>
+    </div>
+
+    <!-- HEADER -->
+    <header id="header" class="hidden">
+        <button class="brand" data-nav="home" aria-label="Ir al inicio">
+            <img class="app-logo" src="assets/cosmo.jpg" alt="Cosmo el perrito astronauta">
+            <b>TECHNOLOGY TO LEARN SAS</b>
+        </button>
+        <div class="header-tools">
+            <span id="miniStats"></span>
+            <button id="audioButton" class="icon-button" aria-label="Activar o desactivar sonidos">🔊</button>
+            <button id="logoutButton" class="secondary" aria-label="Cerrar sesión">Salir</button>
+        </div>
+    </header>
+
+    <main>
+        <noscript>
+            <p style="text-align:center;padding:2rem">Esta aplicación necesita JavaScript para funcionar. Actívalo en tu navegador.</p>
+        </noscript>
+
+        <!-- AUTH SCREEN -->
+        <section id="auth" class="screen active auth-layout lamp-off" data-lamp="off">
+            <div class="hero">
+                <div class="cosmo-logo" id="logoLampSwitch" role="button" tabindex="0" aria-label="Encender la lámpara" aria-pressed="false">
+                    <img src="assets/cosmo.jpg" alt="Cosmo, perrito astronauta">
+                    <span data-logo-object="0">✨</span><span data-logo-object="1">🚀</span><span data-logo-object="2">🪐</span>
+                </div>
+                <p class="eyebrow">ACADEMIA ESPACIAL</p>
+                <h1>Technology<br>to Learn SAS</h1>
+                <p>Una aventura interactiva para aprender matemáticas jugando.</p>
+                <div class="lamp-stage">
+                    <button id="loginLamp" class="login-lamp" type="button" aria-label="Encender la lámpara" aria-pressed="false">
+                        <span class="lamp-shade">⌒</span><span class="lamp-stem"></span><span class="lamp-base"></span>
+                    </button>
+                    <button id="lampCord" class="lamp-cord" type="button" aria-label="Tirar del cordón de la lámpara">
+                        <span class="cord-line"></span><span class="cord-knob"></span>
+                    </button>
+                    <div class="lamp-speech" aria-live="polite">¡Tira del cordón y enciende tu próxima aventura!</div>
+                </div>
+            </div>
+            
+            <div class="panel auth-panel">
+                <div class="tabs">
+                    <button class="tab active" data-auth="login">Ingresar</button>
+                    <button class="tab" data-auth="register">Registro</button>
+                    <button class="tab" data-auth="recover">Recuperar</button>
+                </div>
+
+                <!-- Formularios de Autenticación -->
+                <form id="loginForm" class="form">
+                    <h2>¡Bienvenido a bordo!</h2>
+                    <label>
+                        Correo electrónico
+                        <input id="loginEmail" type="email" value="estudiante@demo.com" required>
+                    </label>
+                    <label>
+                        Contraseña
+                        <input id="loginPassword" type="password" value="123456" minlength="6" required>
+                    </label>
+                    <button type="submit" class="primary">Entrar a la nave</button>
+                    <div class="auth-divider"><span>o continúa con</span></div>
+                    <div id="googleButton" class="google-button" aria-label="Acceder con Google"></div>
+                </form>
+
+                <form id="registerForm" class="form hidden">
+                    <h2>Nueva tripulación</h2>
+                    <label>Nombre<input id="registerName" required maxlength="35"></label>
+                    <label>Correo<input id="registerEmail" type="email" required></label>
+                    <label>Contraseña<input id="registerPassword" type="password" minlength="6" required></label>
+                    <label>
+                        Perfil
+                        <select id="registerRole">
+                            <option value="student">Estudiante</option>
+                            <option value="teacher">Docente</option>
+                            <option value="admin">Directivo / administrativo</option>
+                        </select>
+                    </label>
+                    <label id="adminCodeField" class="hidden">Código privado de directivos<input id="adminCode"></label>
+                    <label>Palabra de recuperación<input id="registerSecret" required></label>
+                    <button type="submit" class="primary">Crear cuenta</button>
+                </form>
+
+                <form id="recoverForm" class="form hidden">
+                    <h2>Recuperación local</h2>
+                    <label>Correo<input id="recoverEmail" type="email" required></label>
+                    <label>Palabra de recuperación<input id="recoverSecret" required></label>
+                    <label>Nueva contraseña<input id="recoverPassword" type="password" minlength="6" required></label>
+                    <button type="submit" class="primary">Cambiar contraseña</button>
+                </form>
+                
+                <p id="authMessage" class="message" aria-live="polite"></p>
+            </div>
+        </section>
+
+        <!-- HOME SCREEN -->
+        <section id="home" class="screen">
+            <div class="panel welcome">
+                <div class="mascot idle">
+                    <img src="assets/cosmo.jpg" alt="Cosmo">
+                    <b class="spark">✨</b>
+                </div>
+                <div>
+                    <p class="eyebrow">CENTRO DE MANDO</p>
+                    <h2 id="welcomeTitle"></h2>
+                    <p id="welcomeSubtitle"></p>
+                    <button id="greetingButton" class="secondary">🔊 Escuchar saludo</button>
+                </div>
+                <div id="welcomeBubble" class="speech" aria-live="polite"></div>
+            </div>
+
+            <!-- Dashboard Estudiante -->
+            <div id="studentDashboard">
+                <div id="studentStats" class="stats"></div>
+                
+                <div class="section-title">
+                    <div>
+                        <p class="eyebrow">RUTA DE APRENDIZAJE</p>
+                        <h2>¿Qué misión sigue?</h2>
+                    </div>
+                    <div class="section-actions">
+                        <button class="secondary" data-nav="logoCustomizer">🎨 Mi logo</button>
+                        <button class="secondary" data-nav="achievements">🏆 Mis logros</button>
+                    </div>
+                </div>
+
+                <div class="subject-grid" role="group" aria-label="Elige una materia">
+                    <button id="mathSubjectButton" class="subject-card" type="button" aria-controls="freeMathContent" aria-expanded="false" aria-pressed="false">
+                        <span class="subject-icon" aria-hidden="true">➗</span>
+                        <span class="subject-copy"><b>Matemáticas</b><small id="mathSubjectSubtitle">Retos gratis · práctica y problemas</small></span>
+                        <span class="subject-arrow" aria-hidden="true">›</span>
+                    </button>
+                    <button id="englishSubjectButton" class="subject-card english" type="button" aria-controls="englishSubjectNotice" aria-expanded="false" aria-pressed="false">
+                        <span class="subject-icon english-icon" aria-hidden="true">EN</span>
+                        <span class="subject-copy"><b>Inglés</b><small>Una nueva materia</small></span>
+                        <span class="subject-arrow" aria-hidden="true">›</span>
+                    </button>
+                </div>
+                <p id="englishSubjectNotice" class="subject-notice hidden" role="status">Inglés está en preparación. Por ahora puedes practicar Matemáticas gratis.</p>
+
+                <section id="freeMathContent" class="subject-content free-math-content hidden" aria-labelledby="freeMathTitle">
+                    <div class="free-math-heading">
+                        <div>
+                            <p class="eyebrow">MATEMÁTICAS · ACCESO GRATUITO</p>
+                            <h2 id="freeMathTitle">Practica a tu manera</h2>
+                            <p>Explora una ruta breve, resuelve acertijos y usa las matemáticas en situaciones cotidianas.</p>
+                        </div>
+                        <span class="free-access-badge">Acceso libre</span>
+                    </div>
+                    <div class="free-route-section">
+                        <div class="free-section-heading">
+                            <div><h3>Rutas de práctica</h3><p>Elige una operación para ver ideas y ejemplos.</p></div>
+                        </div>
+                        <div class="route-grid free-route-grid">
+                            <button type="button" data-route="add"><span aria-hidden="true">➕</span><b>Suma</b><small>Juntar y calcular</small></button>
+                            <button type="button" data-route="subtract"><span aria-hidden="true">➖</span><b>Resta</b><small>Comparar y encontrar diferencias</small></button>
+                            <button type="button" data-route="multiply"><span aria-hidden="true">✖️</span><b>Multiplicación</b><small>Crear grupos iguales</small></button>
+                            <button type="button" data-route="divide"><span aria-hidden="true">➗</span><b>División</b><small>Repartir por igual</small></button>
+                        </div>
+                    </div>
+                    <div class="premium-grid free-challenge-grid">
+                        <article class="panel free-challenge-card">
+                            <div class="free-challenge-title"><span aria-hidden="true">🧩</span><div><h3>Rompecabezas espacial</h3><small>Un reto para pensar paso a paso</small></div></div>
+                            <p id="puzzleQuestion"></p>
+                            <div id="puzzleOptions" class="answers"></div>
+                            <button id="newPuzzle" class="secondary" type="button">Otro rompecabezas</button>
+                        </article>
+                        <article class="panel free-challenge-card">
+                            <div class="free-challenge-title"><span aria-hidden="true">🛒</span><div><h3>Matemáticas cotidianas</h3><small>Resuelve situaciones de la vida real</small></div></div>
+                            <p id="realQuestion"></p>
+                            <div id="realOptions" class="answers"></div>
+                            <button id="newRealQuestion" class="secondary" type="button">Otro ejercicio</button>
+                        </article>
+                    </div>
+                </section>
+
+                <div class="home-cards">
+                    <article class="panel">
+                        <h3><span class="daily-flame" aria-hidden="true">🔥</span> Racha diaria <span class="daily-streak-value" id="dailyStreakValue">1 día</span></h3>
+                        <p id="dailyText"></p>
+                        <div class="progress"><i id="dailyProgress"></i></div>
+                    </article>
+                    <article class="panel calm-card">
+                        <h3>🌿 Aprende a tu ritmo</h3>
+                        <p id="calmMessage" aria-live="polite"></p>
+                    </article>
+                </div>
+                
+                <button class="premium-banner" data-nav="premium">
+                    <span class="premium-crown" aria-hidden="true">👑</span>
+                    <div>
+                        <b id="premiumHomeTitle">Curso completo · Premium</b>
+                        <small id="premiumHomeDescription">4 unidades guiadas, videos y evaluación con nota.</small>
+                    </div>
+                    <strong id="premiumHomeAction">Conocer</strong>
+                </button>
+            </div>
+
+            <!-- Dashboard Docente/Admin -->
+            <div id="staffDashboard" class="staff-dashboard hidden">
+                <div class="staff-header">
+                    <div>
+                        <p class="eyebrow">GESTIÓN ACADÉMICA</p>
+                        <h2 id="staffTitle"></h2>
+                        <p class="staff-intro">Indicadores del grupo y avance individual de tus estudiantes.</p>
+                    </div>
+                    <button id="excelButton" class="secondary staff-export" type="button"><span aria-hidden="true">↓</span> Exportar Excel</button>
+                </div>
+                
+                <div id="staffStats" class="staff-stats" aria-label="Indicadores académicos"></div>
+                
+                <div class="staff-roster-heading">
+                    <div>
+                        <h3>Seguimiento individual</h3>
+                        <p>Consulta el desempeño y progreso de cada estudiante.</p>
+                    </div>
+                    <label class="staff-search">
+                        <span aria-hidden="true">⌕</span>
+                        <span class="staff-sr-only">Buscar estudiante</span>
+                        <input id="studentSearch" type="search" placeholder="Buscar estudiante" autocomplete="off">
+                    </label>
+                </div>
+
+                <div class="panel table-wrapper staff-table-panel">
+                    <table class="staff-table">
+                        <caption class="staff-sr-only">Desempeño, notas de cada unidad y evaluación final por estudiante</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Estudiante</th>
+                                <th scope="col">Estado académico</th>
+                                <th scope="col">Precisión</th>
+                                <th scope="col">Unidades aprobadas</th>
+                                <th scope="col">Suma / 5.0</th>
+                                <th scope="col">Resta / 5.0</th>
+                                <th scope="col">Multiplicación / 5.0</th>
+                                <th scope="col">División / 5.0</th>
+                                <th scope="col">Evaluación final / 5.0</th>
+                                <th scope="col">Tiempo de práctica</th>
+                                <th scope="col">Más practicada</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentTable"></tbody>
+                    </table>
+                </div>
+
+                <div id="paymentAdmin" class="staff-payments hidden">
+                    <div class="staff-payments-header">
+                        <div>
+                            <p class="eyebrow">FACTURACIÓN</p>
+                            <h3>Solicitudes Premium</h3>
+                            <p>Revisa los comprobantes y administra las activaciones.</p>
+                        </div>
+                    </div>
+                    <div id="paymentSummary" class="payment-summary"></div>
+                    <div class="payment-toolbar">
+                        <span id="paymentResultCount" aria-live="polite"></span>
+                        <div id="paymentFilters" role="group" aria-label="Filtrar solicitudes Premium">
+                            <button type="button" class="selected" data-payment-filter="pending">Pendientes</button>
+                            <button type="button" data-payment-filter="all">Todas</button>
+                        </div>
+                    </div>
+                    <div id="paymentList" class="payment-list" aria-live="polite"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- OPERATION SCREEN -->
+        <section id="operation" class="screen">
+            <button class="back" data-nav="home">← Volver al mapa</button>
+            
+            <div class="panel operation-header">
+                <div class="mascot thinking"><img src="assets/cosmo.jpg" alt="Cosmo"></div>
+                <div>
+                    <p class="eyebrow">NUEVA MISIÓN</p>
+                    <h2 id="operationTitle"></h2>
+                    <p id="operationDescription"></p>
+                    <div id="operationTip" class="speech"></div>
+                </div>
+            </div>
+
+            <!-- El video se carga al entrar en la operación elegida. -->
+            <div class="panel video-panel">
+                <p class="eyebrow">🎬 VÍDEO DE LA OPERACIÓN</p>
+                <div class="video-audio-controls">
+                    <button id="videoMuteButton" class="video-mute-button" type="button" aria-label="Silenciar video" aria-pressed="false">🔊</button>
+                    <label for="videoVolume">Volumen</label>
+                    <input id="videoVolume" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volumen del video">
+                    <output id="videoVolumeValue" for="videoVolume">100%</output>
+                </div>
+                <div class="video-frame" id="operationVideoFrame">
+                    <p class="video-wait">Pulsa una operación en el mapa para ver su vídeo.</p>
+                </div>
+            </div>
+
+            <button id="practiceButton" class="primary practice-button" type="button">🎮 Practicar esta operación</button>
+
+            <div class="panel settings">
+                <label>
+                    Nivel
+                    <select id="levelSelect">
+                        <option value="1">Nivel 1 · Explorador</option>
+                        <option value="2">Nivel 2 · Piloto</option>
+                        <option value="3">Nivel 3 · Comandante</option>
+                    </select>
+                </label>
+                <label>
+                    Tiempo por pregunta
+                    <select id="timeSelect">
+                        <option value="0">Sin límite</option>
+                        <option value="60" selected>60 segundos</option>
+                        <option value="90">90 segundos</option>
+                        <option value="120">2 minutos</option>
+                    </select>
+                </label>
+                <label>
+                    Cantidad de preguntas
+                    <select id="questionCount">
+                        <option value="5">5 preguntas</option>
+                        <option value="10" selected>10 preguntas</option>
+                        <option value="15">15 preguntas</option>
+                        <option value="20">20 preguntas</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <!-- QUIZ SCREEN -->
+        <section id="quiz" class="screen">
+            <div class="quiz-header">
+                <button id="quitQuiz" class="back">× Terminar</button>
+                <b id="questionNumber"></b>
+                <span id="timerBox">⏱ <b id="timerValue"></b></span>
+            </div>
+            <div class="quiz-mission-banner">
+                <span aria-hidden="true">🚀</span>
+                <div>
+                    <p id="quizModeLabel" class="eyebrow">CENTRO DE MISIONES</p>
+                    <p id="quizMissionText">Cada pregunta es un nuevo reto espacial.</p>
+                </div>
+                <span id="quizStreak" class="quiz-streak">✨ 0</span>
+            </div>
+            <div class="progress"><i id="quizProgress"></i></div>
+            
+            <div class="quiz-layout">
+                <aside>
+                    <div id="quizMascot" class="mascot bouncing"><img src="assets/cosmo.jpg" alt="Cosmo"></div>
+                    <div id="quizBubble" class="speech" aria-live="polite"></div>
+                </aside>
+                
+                <div class="panel quiz-card">
+                    <div class="quiz-card-heading">
+                        <span id="questionType" class="pill"></span>
+                        <span id="quizOperationBadge" class="pill quiz-operation-badge hidden"></span>
+                    </div>
+                    <div id="challengeScene" class="challenge-scene" aria-hidden="true"></div>
+                    <p id="questionStory"></p>
+                    <div id="visualQuestion" class="visual-question"></div>
+                    <div id="equation" class="equation"></div>
+                    <div id="answerOptions" class="answers"></div>
+                    
+                    <form id="answerForm">
+                        <input id="writtenAnswer" type="number" inputmode="numeric" placeholder="O escribe aquí">
+                        <button type="submit" class="primary">Comprobar</button>
+                    </form>
+
+                    <p id="feedback" class="feedback" aria-live="polite"></p>
+                    <button id="nextQuestion" class="primary hidden">Siguiente aventura →</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUMMARY SCREEN -->
+        <section id="summary" class="screen">
+            <div class="panel summary">
+                <div class="mascot celebrating">
+                    <img src="assets/cosmo.jpg" alt="Cosmo celebrando"><b>⭐</b>
+                </div>
+                <h2 id="summaryTitle">¡Misión completada!</h2>
+                <p id="summaryMessage"></p>
+                <div id="summaryStats" class="stats"></div>
+                <div id="assessmentBreakdown" class="assessment-breakdown hidden" aria-live="polite"></div>
+                <div class="button-row">
+                    <button id="repeatMission" class="primary">Repetir misión</button>
+                    <button class="secondary" data-nav="home">Volver al mapa</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- PREMIUM SCREEN -->
+        <section id="premium" class="screen">
+            <button class="back" data-nav="home">← Volver</button>
+            <div class="panel premium-hero">
+                <div class="mascot floating"><img src="assets/cosmo.jpg" alt="Cosmo Premium"></div>
+                <p class="eyebrow">PASE GALÁCTICO</p>
+                <h2 id="premiumTitle">Curso completo de Matemáticas</h2>
+                <p id="premiumDescription">Aprende las cuatro operaciones con videos, práctica y una evaluación final.</p>
+                <div id="premiumState"></div>
+            </div>
+            
+            <div id="paymentSection" class="panel payment">
+                <div class="premium-course-preview">
+                    <p class="eyebrow">LO QUE INCLUYE</p>
+                    <h3>Curso de Matemáticas · grado tercero</h3>
+                    <div class="course-preview-items">
+                        <span>01 · Suma</span><span>02 · Resta</span><span>03 · Multiplicación</span>
+                        <span>04 · División</span><span>05 · Evaluación final</span>
+                    </div>
+                    <p>Videos de aprendizaje guiado, prácticas con distintos formatos y calificaciones de 1,0 a 5,0.</p>
+                </div>
+                <h3>Solicitar acceso Premium</h3>
+                <p>Elige un número autorizado de Nequi y registra los datos del comprobante. La administración verificará el pago antes de activar el curso.</p>
+                <div id="nequiChoices" class="nequi-grid"></div>
+                <label class="nequi-select-label">
+                    Número utilizado
+                    <select id="paymentNequi" required></select>
+                </label>
+                <p>Después registra el comprobante. La administración debe verificar el movimiento directamente en Nequi antes de aprobar.</p>
+                
+                <form id="paymentForm" class="form">
+                    <label>Correo de la cuenta<input id="paymentEmail" type="email" required></label>
+                    <label>Referencia del comprobante<input id="paymentReference" required></label>
+                    <label>Valor enviado en COP<input id="paymentAmount" type="number" min="1" required></label>
+                    <button type="submit" class="primary">Solicitar verificación</button>
+                </form>
+                <small>Nunca compartas contraseñas ni códigos de seguridad de Nequi.</small>
+            </div>
+            
+            <div id="premiumContent" class="hidden">
+                <div class="panel premium-course-access">
+                    <div class="premium-course-access-heading">
+                        <p class="eyebrow">TU CURSO ESTÁ ACTIVO</p>
+                        <h3>Matemáticas de grado tercero</h3>
+                        <p>Avanza en orden por las cuatro operaciones y termina con una evaluación final. Cada unidad registra tu nota.</p>
+                    </div>
+                    <div class="course-preview-items">
+                        <span>01 · Suma</span><span>02 · Resta</span><span>03 · Multiplicación</span>
+                        <span>04 · División</span><span>05 · Evaluación</span>
+                    </div>
+                </div>
+                <section id="mathSubjectContent" class="subject-content premium-math-content" aria-labelledby="mathSubjectTitle">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">MATEMÁTICAS</p>
+                            <h2 id="mathSubjectTitle">Grado tercero</h2>
+                            <div class="route-progress-row">
+                                <span id="pathProgressText">0 de 4 misiones</span>
+                                <div class="route-progress" role="progressbar" aria-label="Progreso de la ruta" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0">
+                                    <i id="pathProgressFill"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="operationPath" class="operation-grid learning-path">
+                        <button data-operation="add" class="operation add">
+                            <span class="path-node"><span class="path-number">01</span><span class="operation-icon" aria-hidden="true">➕</span><span class="path-check" aria-hidden="true">✓</span></span>
+                            <span class="path-copy"><b>Suma</b><small>Junta cantidades</small><span class="path-status">Siguiente misión</span></span>
+                        </button>
+                        <button data-operation="subtract" class="operation subtract">
+                            <span class="path-node"><span class="path-number">02</span><span class="operation-icon" aria-hidden="true">➖</span><span class="path-check" aria-hidden="true">✓</span></span>
+                            <span class="path-copy"><b>Resta</b><small>Descubre cuánto queda</small><span class="path-status">En tu ruta</span></span>
+                        </button>
+                        <button data-operation="multiply" class="operation multiply">
+                            <span class="path-node"><span class="path-number">03</span><span class="operation-icon" aria-hidden="true">✖️</span><span class="path-check" aria-hidden="true">✓</span></span>
+                            <span class="path-copy"><b>Multiplicación</b><small>Forma grupos iguales</small><span class="path-status">En tu ruta</span></span>
+                        </button>
+                        <button data-operation="divide" class="operation divide">
+                            <span class="path-node"><span class="path-number">04</span><span class="operation-icon" aria-hidden="true">➗</span><span class="path-check" aria-hidden="true">✓</span></span>
+                            <span class="path-copy"><b>División</b><small>Reparte por igual</small><span class="path-status">En tu ruta</span></span>
+                        </button>
+                    </div>
+                    <div class="evaluation-unit" id="evaluationUnit">
+                        <span class="evaluation-node" aria-hidden="true"><b>05</b><span>🏆</span></span>
+                        <div class="evaluation-copy">
+                            <p class="eyebrow">UNIDAD FINAL</p>
+                            <h3>Evaluación de las cuatro operaciones</h3>
+                            <p id="evaluationStatus">Aprueba las cuatro unidades para desbloquear esta evaluación.</p>
+                        </div>
+                        <button id="evaluationButton" class="primary" type="button" disabled>🔒 Evaluación bloqueada</button>
+                    </div>
+                    <section id="mathGradeSummary" class="math-grade-summary" aria-labelledby="mathGradeSummaryTitle" aria-live="polite">
+                        <div class="math-grade-summary-heading">
+                            <div>
+                                <p class="eyebrow">CIERRE DEL CURSO</p>
+                                <h3 id="mathGradeSummaryTitle">Resumen de notas</h3>
+                                <p>Calificación de cada unidad y promedio de las notas registradas.</p>
+                            </div>
+                            <div class="math-grade-average">
+                                <small>Promedio actual <span id="mathGradeCount">(0 de 5 notas)</span></small>
+                                <b id="mathGradeAverage">—</b>
+                                <small>/ 5.0</small>
+                            </div>
+                        </div>
+                        <div id="mathGradeList" class="math-grade-list"></div>
+                    </section>
+                </section>
+            </div>
+        </section>
+
+        <!-- ROUTE SCREEN -->
+        <section id="route" class="screen">
+            <button class="back" data-nav="home">← Volver</button>
+            <article id="routeContent" class="panel guide"></article>
+        </section>
+
+        <!-- ACHIEVEMENTS SCREEN -->
+        <section id="achievements" class="screen">
+            <button class="back" data-nav="home">← Volver</button>
+            <div class="panel">
+                <p class="eyebrow">GALERÍA ESPACIAL</p>
+                <h2>Mis 50 logros</h2>
+                <p class="achievement-intro">Cada práctica, misión y esfuerzo cuenta. ¡Descubre cuáles puedes desbloquear!</p>
+                <div id="achievementSummary" class="achievement-summary" aria-live="polite"></div>
+                <div id="achievementFilters" class="achievement-filters" role="group" aria-label="Filtrar logros">
+                    <button type="button" class="selected" data-achievement-filter="all">🌌 Todos</button>
+                    <button type="button" data-achievement-filter="explore">🚀 Exploración</button>
+                    <button type="button" data-achievement-filter="streak">🔥 Rachas</button>
+                    <button type="button" data-achievement-filter="operations">➕ Operaciones</button>
+                    <button type="button" data-achievement-filter="assessment">📝 Evaluación</button>
+                    <button type="button" data-achievement-filter="creative">🎨 Creatividad</button>
+                </div>
+                <div id="achievementGrid" class="achievement-grid"></div>
+            </div>
+        </section>
+
+        <!-- LOGO CUSTOMIZER -->
+        <section id="logoCustomizer" class="screen">
+            <button class="back" data-nav="home">← Volver</button>
+            <div class="panel logo-customizer">
+                <p class="eyebrow">TALLER DE COSMO</p>
+                <h2>Diseña tu logo</h2>
+                <p>Elige colores y objetos para que tu nave se parezca a ti.</p>
+
+                <div class="logo-preview" id="logoPreview">
+                    <img src="assets/cosmo.jpg" alt="Vista previa de Cosmo">
+                        <span class="suit-badge" aria-live="polite"><span class="suit-badge-icon" aria-hidden="true">✦</span><b>Traje clásico</b></span>
+                        <span data-preview-object="0">✨</span><span data-preview-object="1">🚀</span><span data-preview-object="2">🪐</span>
+                </div>
+
+                <div class="customizer-group">
+                    <h3>Color del brillo</h3>
+                    <div class="swatch-row" id="logoGlowOptions">
+                        <button type="button" class="color-swatch" data-glow="#7b4dff" style="--swatch:#7b4dff" aria-label="Morado"></button>
+                        <button type="button" class="color-swatch" data-glow="#39dce8" style="--swatch:#39dce8" aria-label="Azul cielo"></button>
+                        <button type="button" class="color-swatch" data-glow="#ff8a3d" style="--swatch:#ff8a3d" aria-label="Naranja"></button>
+                        <button type="button" class="color-swatch" data-glow="#62e497" style="--swatch:#62e497" aria-label="Verde"></button>
+                        <button type="button" class="color-swatch" data-glow="#ff5c9a" style="--swatch:#ff5c9a" aria-label="Rosa"></button>
+                    </div>
+                </div>
+
+                <div class="customizer-group">
+                    <h3>Color del fondo</h3>
+                    <div class="swatch-row" id="logoBackgroundOptions">
+                        <button type="button" class="color-swatch" data-background="#0b072d" style="--swatch:#0b072d" aria-label="Noche"></button>
+                        <button type="button" class="color-swatch" data-background="#123f70" style="--swatch:#123f70" aria-label="Planeta azul"></button>
+                        <button type="button" class="color-swatch" data-background="#481878" style="--swatch:#481878" aria-label="Nebulosa morada"></button>
+                        <button type="button" class="color-swatch" data-background="#174d45" style="--swatch:#174d45" aria-label="Bosque espacial"></button>
+                    </div>
+                </div>
+
+                <div class="customizer-group">
+                    <h3>Objetos que orbitan</h3>
+                    <div class="object-picker" id="logoObjectOptions">
+                        <button type="button" data-object="✨" data-slot="0">✨ Estrella</button>
+                        <button type="button" data-object="🚀" data-slot="1">🚀 Cohete</button>
+                        <button type="button" data-object="🪐" data-slot="2">🪐 Planeta</button>
+                        <button type="button" data-object="🌙" data-slot="0">🌙 Luna</button>
+                        <button type="button" data-object="⭐" data-slot="1">⭐ Estrella grande</button>
+                        <button type="button" data-object="👽" data-slot="2">👽 Alien</button>
+                    </div>
+                </div>
+
+                <div class="logo-style-grid">
+                    <div class="customizer-group">
+                        <h3>Traje espacial</h3>
+                        <div class="object-picker" id="logoSuitOptions">
+                            <button type="button" data-suit="classic">🧑‍🚀 Clásico</button>
+                            <button type="button" data-suit="lunar">🌙 Lunar</button>
+                            <button type="button" data-suit="mars">🔴 Marte</button>
+                            <button type="button" data-suit="alien">👽 Alienígena</button>
+                            <button type="button" data-suit="robot">🤖 Robótico</button>
+                            <button type="button" data-suit="galaxy">🌌 Galáctico</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="toast" aria-live="polite"></div>
+
+    <!-- Ejecuta la aplicación desde un servidor local o web para reproducir los videos. -->
+    <script src="js/app.js"></script>
+</body>
+</html>

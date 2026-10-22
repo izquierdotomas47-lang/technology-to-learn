@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title">
+  <title id="title">Alien espacial</title>
+  <defs>
+    <radialGradient id="space" cx="35%" cy="25%">
+      <stop offset="0" stop-color="#34266b"/>
+      <stop offset="1" stop-color="#0b072d"/>
+    </radialGradient>
+    <linearGradient id="skin" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#bbff9c"/>
+      <stop offset="1" stop-color="#31c88a"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#space)" stroke="#88ffe1" stroke-width="4"/>
+  <path d="M51 48 34 36l6 26m69-14 17-12-6 26" fill="none" stroke="#78eead" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
+  <path d="M80 29c-28 0-43 25-43 52 0 29 18 49 43 49s43-20 43-49c0-27-15-52-43-52Z" fill="url(#skin)" stroke="#e4ffd6" stroke-width="3"/>
+  <ellipse cx="62" cy="75" rx="15" ry="21" fill="#132044" transform="rotate(-16 62 75)"/>
+  <ellipse cx="98" cy="75" rx="15" ry="21" fill="#132044" transform="rotate(16 98 75)"/>
+  <circle cx="67" cy="69" r="4" fill="#fff"/>
+  <circle cx="103" cy="69" r="4" fill="#fff"/>
+  <path d="M66 103c8 8 20 8 28 0" fill="none" stroke="#176d56" stroke-linecap="round" stroke-width="4"/>
+  <path d="M42 139c8-13 21-19 38-19s30 6 38 19" fill="#7b4dff" stroke="#c5a7ff" stroke-width="3"/>
+  <circle cx="80" cy="133" r="6" fill="#ffd83e"/>
+</svg>
