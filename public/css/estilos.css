@@ -5480,6 +5480,181 @@ a:focus-visible {
 
 #premium .math-grade-item.has-grade > b { color: #8fe0c9; }
 
+#premium .math-tutor {
+  display: grid;
+  gap: 13px;
+  width: min(100%, 760px);
+  margin: 16px auto 18px;
+  padding: 18px;
+  border: 1px solid #8c71ff35;
+  border-radius: 12px;
+  background: linear-gradient(125deg, #1b1b31, #111a20);
+  box-shadow: 0 14px 32px #05071035;
+}
+
+#premium .math-tutor-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+#premium .math-tutor-avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border: 1px solid #a08aff55;
+  border-radius: 12px;
+  background: #8c71ff1c;
+  font-size: 1.15rem;
+}
+
+#premium .math-tutor-heading .eyebrow {
+  margin: 0 0 4px;
+  color: #b3a4ff;
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .1em;
+}
+
+#premium .math-tutor-heading h3 {
+  margin: 0;
+  color: #f0efff;
+  font-size: .96rem;
+}
+
+#premium .math-tutor-heading p:last-child {
+  margin: 4px 0 0;
+  color: #a0a9b4;
+  font-size: .72rem;
+}
+
+#premium .math-tutor-messages {
+  display: grid;
+  max-height: 240px;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #d4e6e514;
+  border-radius: 9px;
+  background: #0b1119a8;
+}
+
+#premium .math-tutor-message {
+  width: fit-content;
+  max-width: min(92%, 560px);
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #d4e6e518;
+  border-radius: 10px 10px 10px 3px;
+  color: #d8e0e7;
+  font-size: .78rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#premium .math-tutor-message.assistant {
+  border-color: #8c71ff35;
+  background: #8c71ff12;
+}
+
+#premium .math-tutor-message.student {
+  justify-self: end;
+  border-color: #70d7c340;
+  border-radius: 10px 10px 3px 10px;
+  background: #70d7c310;
+}
+
+#premium .math-tutor-status {
+  min-height: 1em;
+  margin: 0;
+  color: #d9bb78;
+  font-size: .72rem;
+}
+
+#premium .math-tutor-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  margin: 0;
+}
+
+#premium .math-tutor-form textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 110px;
+  resize: vertical;
+  padding: 10px 11px;
+  border: 1px solid #d4e6e526;
+  border-radius: 8px;
+  background: #0b1119;
+  color: #e5eeeb;
+  font: inherit;
+  font-size: .78rem;
+  line-height: 1.4;
+}
+
+#premium .math-tutor-form textarea:focus {
+  border-color: #a08aff9c;
+  outline: 2px solid #a08aff36;
+}
+
+#premium .math-tutor-form button {
+  min-height: 42px;
+  padding: 9px 13px;
+  border: 1px solid #8c71ff6b;
+  border-radius: 8px;
+  background: #5544a5;
+  color: #fff;
+  font-size: .74rem;
+  font-weight: 750;
+}
+
+#premium .math-tutor-form button:disabled,
+#premium .math-tutor-quiz button:disabled { cursor: wait; opacity: .7; }
+
+#premium .math-tutor-privacy {
+  color: #849499;
+  font-size: .64rem;
+  line-height: 1.4;
+}
+
+.math-tutor-quiz {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.math-tutor-quiz > button {
+  width: fit-content;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #a08aff5e;
+  border-radius: 8px;
+  background: #8c71ff15;
+  color: #d4cbff;
+  font-size: .75rem;
+  font-weight: 750;
+}
+
+.math-tutor-quiz-reply {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid #8c71ff35;
+  border-radius: 9px;
+  background: #17162a;
+  color: #dedaff;
+  font-size: .8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.math-tutor-quiz-reply.error { border-color: #ce85854a; color: #e2aaaa; }
+
 #premium #premiumContent {
   border: 0;
   background: transparent;
@@ -5651,6 +5826,10 @@ a:focus-visible {
   #premium .math-grade-average small:first-child { grid-column: 1 / -1; }
   #premium .math-grade-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #premium .math-grade-item:last-child { grid-column: 1 / -1; }
+  #premium .math-tutor { gap: 11px; margin: 14px auto; padding: 14px 12px; }
+  #premium .math-tutor-form { grid-template-columns: 1fr; }
+  #premium .math-tutor-form button { width: 100%; }
+  .math-tutor-quiz > button { width: 100%; }
   #premium #operationPath.learning-path { padding-left: 4px; }
   #premium #operationPath.learning-path::before,
   #premium #operationPath.learning-path::after { left: 28px; }

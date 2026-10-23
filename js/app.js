@@ -127,6 +127,7 @@ const navigate = id => {
 // 2. DATABASE (LocalStorage)
 // ==========================================
 const DB_KEY = 'ttl_ultimate_db_v1';
+const MATH_TUTOR_API_URL = document.querySelector('meta[name="ttl-math-tutor-api"]')?.content.trim() || '';
 const ADMIN_CODE = 'TTL-DIRECCION-2026';
 const NEQUI_NUMBER = '3104337927';
 const NEQUI_NUMBERS = ['3104337927', '3245957915', '3135595448'];
@@ -348,6 +349,7 @@ function authMessage(text, type = '') {
 function startUserSession(user) {
     userId = user.id;
     sessionSet('ttl_ultimate_user', user.id);
+    resetMathTutorConversation();
     applyDailyReset(user);
     navigate('home');
     setTimeout(greeting, 300);
@@ -1321,6 +1323,74 @@ function renderPremium() {
 const PASS_GRADE = 3.5;
 const operationKeys = ['add', 'subtract', 'multiply', 'divide'];
 let lastQuizMode = 'practice';
+let mathTutorMessages = [];
+let mathTutorPending = false;
+
+function resetMathTutorConversation() {
+    mathTutorMessages = [];
+    const messages = $('#mathTutorMessages');
+    if (messages) {
+        messages.replaceChildren();
+        const greeting = document.createElement('p');
+        greeting.className = 'math-tutor-message assistant';
+        greeting.textContent = '¡Hola! Puedo darte pistas y explicarte las cuatro operaciones. ¿Qué quieres aprender?';
+        messages.append(greeting);
+    }
+    const status = $('#mathTutorStatus');
+    if (status) status.textContent = '';
+    const input = $('#mathTutorInput');
+    if (input) input.value = '';
+}
+
+function appendMathTutorMessage(role, text, container = $('#mathTutorMessages')) {
+    if (!container) return;
+    const message = document.createElement('p');
+    message.className = `math-tutor-message ${role === 'model' ? 'assistant' : 'student'}`;
+    message.textContent = text;
+    container.append(message);
+    container.scrollTop = container.scrollHeight;
+}
+
+async function requestMathTutor(payload) {
+    const user = currentUser();
+    if (!user || user.role !== 'student' || !user.premium) {
+        throw new Error('El tutor de Matemáticas está disponible para estudiantes con acceso Premium.');
+    }
+    if (!MATH_TUTOR_API_URL) {
+        throw new Error('El tutor aún no está conectado. Falta configurar la dirección segura de su servicio.');
+    }
+    let tutorEndpoint;
+    try {
+        tutorEndpoint = new URL(MATH_TUTOR_API_URL);
+    } catch {
+        throw new Error('La dirección del servicio del tutor no es válida. Inténtalo más tarde.');
+    }
+    if (tutorEndpoint.protocol !== 'https:') {
+        throw new Error('La conexión segura del tutor no está disponible.');
+    }
+    const response = await fetch(tutorEndpoint.href, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ...payload,
+            history: Array.isArray(payload.history) ? payload.history : mathTutorMessages.slice(-8)
+        })
+    });
+    let result;
+    try {
+        result = await response.json();
+    } catch (error) {
+        console.error('El servicio del tutor devolvió una respuesta inválida.', error);
+        throw new Error('No se pudo leer la respuesta del tutor. Inténtalo de nuevo.');
+    }
+    if (!response.ok) {
+        throw new Error(typeof result?.error === 'string' ? result.error : 'El tutor no pudo responder. Inténtalo de nuevo.');
+    }
+    if (typeof result?.reply !== 'string' || !result.reply.trim()) {
+        throw new Error('El tutor devolvió una respuesta vacía. Inténtalo de nuevo.');
+    }
+    return result.reply.trim();
+}
 
 function baseQuestion(operation = currentOperation, type = randomItem(questionTypes)) {
     const level = Math.min(3, Math.max(1, toNum($('#levelSelect')?.value, 1)));
@@ -1403,6 +1473,16 @@ function nextQuizQuestion() {
         quizState.operationPlan[quizState.index],
         quizState.questionTypePlan[quizState.index]
     );
+    const tutorReply = $('#quizTutorReply');
+    if (tutorReply) {
+        tutorReply.textContent = '';
+        tutorReply.classList.add('hidden');
+    }
+    const tutorButton = $('#quizTutorButton');
+    if (tutorButton) {
+        tutorButton.disabled = false;
+        tutorButton.textContent = '✨ Pedir una pista a Cosmo IA';
+    }
     
     $('#questionNumber').textContent = `Pregunta ${quizState.index + 1} de ${quizState.total}`;
     $('#quizProgress').style.width = (quizState.index / quizState.total) * 100 + '%';
@@ -1513,6 +1593,10 @@ function checkAnswer(value) {
     const q = quizState.question;
     const answered = value !== null && value !== undefined && value !== '';
     const correct = answered && Number(value) === Number(q.target);
+    q.attempted = answered;
+    q.studentAnswer = answered
+        ? q.type === 'truefalse' ? (Number(value) ? 'Verdadero' : 'Falso') : String(value)
+        : 'No respondió';
     quizState.index++;
     quizState.operationTotals[q.operation]++;
     if (correct) {
@@ -1856,6 +1940,7 @@ function setupApp() {
     $('#logoutButton').onclick = () => {
         if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch {} }
         clearInterval(timerId); timerId = null;
+        resetMathTutorConversation();
         userId = null;
         sessionRemove('ttl_ultimate_user');
         $('#auth')?.classList.add('lamp-off');
@@ -1949,6 +2034,87 @@ function setupApp() {
     $('#evaluationButton').onclick = () => startQuiz('assessment');
     $('#repeatMission').onclick = () => startQuiz(lastQuizMode);
     $('#quitQuiz').onclick = () => { clearInterval(timerId); speechSynthesis.cancel(); navigate('home'); };
+
+    $('#mathTutorForm').onsubmit = async event => {
+        event.preventDefault();
+        if (mathTutorPending) return;
+        const input = $('#mathTutorInput');
+        const sendButton = $('#mathTutorSend');
+        const status = $('#mathTutorStatus');
+        const prompt = input.value.trim();
+        if (!prompt) {
+            status.textContent = 'Escribe una pregunta para continuar.';
+            input.focus();
+            return;
+        }
+
+        mathTutorPending = true;
+        sendButton.disabled = true;
+        status.textContent = 'Cosmo está pensando...';
+        $('#mathTutorForm').setAttribute('aria-busy', 'true');
+        try {
+            const reply = await requestMathTutor({
+                prompt,
+                phase: 'chat',
+                question: '',
+                operation: '',
+                studentAnswer: '',
+                correctAnswer: ''
+            });
+            appendMathTutorMessage('user', prompt);
+            appendMathTutorMessage('model', reply);
+            mathTutorMessages = [
+                ...mathTutorMessages,
+                { role: 'user', text: prompt },
+                { role: 'model', text: reply }
+            ].slice(-8);
+            input.value = '';
+            status.textContent = '';
+        } catch (error) {
+            console.error('No se pudo completar la pregunta al tutor.', error);
+            status.textContent = error.message || 'No se pudo conectar con el tutor. Inténtalo de nuevo.';
+        } finally {
+            mathTutorPending = false;
+            sendButton.disabled = false;
+            $('#mathTutorForm').removeAttribute('aria-busy');
+        }
+    };
+
+    $('#quizTutorButton').onclick = async () => {
+        if (mathTutorPending || !quizState?.question) return;
+        const button = $('#quizTutorButton');
+        const replyElement = $('#quizTutorReply');
+        const question = quizState.question;
+        const reviewed = Boolean(question.attempted);
+        mathTutorPending = true;
+        button.disabled = true;
+        button.textContent = reviewed ? 'Cosmo está explicando...' : 'Cosmo está pensando...';
+        replyElement.textContent = '';
+        replyElement.classList.remove('hidden');
+        replyElement.classList.remove('error');
+        try {
+            const reply = await requestMathTutor({
+                prompt: reviewed
+                    ? 'Explícame paso a paso cómo resolver el ejercicio y ayúdame a entender mi respuesta.'
+                    : 'Dame una pista breve para pensar y resolver el ejercicio, sin decirme el resultado.',
+                phase: reviewed ? 'review' : 'hint',
+                operation: question.operation,
+                question: question.text,
+                studentAnswer: reviewed ? question.studentAnswer : '',
+                correctAnswer: reviewed ? String(question.answer) : '',
+                history: []
+            });
+            replyElement.textContent = reply;
+        } catch (error) {
+            console.error('No se pudo obtener la ayuda del tutor para el ejercicio.', error);
+            replyElement.textContent = error.message || 'No se pudo conectar con el tutor. Inténtalo de nuevo.';
+            replyElement.classList.add('error');
+        } finally {
+            mathTutorPending = false;
+            button.disabled = false;
+            button.textContent = reviewed ? '✨ Pedir explicación a Cosmo IA' : '✨ Pedir otra pista a Cosmo IA';
+        }
+    };
     
     $('#answerForm').onsubmit = e => {
         e.preventDefault(); unlockAudio();

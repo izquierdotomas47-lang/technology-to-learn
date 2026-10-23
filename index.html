@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#100736">
     <meta name="description" content="Plataforma educativa espacial de matemáticas e inglés para grado tercero">
     <meta name="ttl-assets-root" content="public/assets">
+    <meta name="ttl-math-tutor-api" content="">
     <title>Technology to Learn SAS</title>
     
     <link rel="manifest" href="public/manifest.json">
@@ -381,6 +382,10 @@
                         <button type="submit" class="primary">Comprobar</button>
                     </form>
 
+                    <aside id="quizTutor" class="math-tutor-quiz">
+                        <button id="quizTutorButton" class="secondary" type="button">✨ Pedir una pista a Cosmo IA</button>
+                        <p id="quizTutorReply" class="math-tutor-quiz-reply hidden" aria-live="polite"></p>
+                    </aside>
                     <p id="feedback" class="feedback" aria-live="polite"></p>
                     <button id="nextQuestion" class="primary hidden">Siguiente aventura →</button>
                 </div>
@@ -509,6 +514,26 @@
                             </div>
                         </div>
                         <div id="mathGradeList" class="math-grade-list"></div>
+                    </section>
+                    <section id="mathTutor" class="math-tutor panel" aria-labelledby="mathTutorTitle">
+                        <div class="math-tutor-heading">
+                            <span class="math-tutor-avatar" aria-hidden="true">✨</span>
+                            <div>
+                                <p class="eyebrow">AYUDA CON INTELIGENCIA ARTIFICIAL</p>
+                                <h3 id="mathTutorTitle">Tutor de Matemáticas</h3>
+                                <p>Pregunta cómo resolver una operación o pide un ejemplo paso a paso.</p>
+                            </div>
+                        </div>
+                        <div id="mathTutorMessages" class="math-tutor-messages" role="log" aria-live="polite" aria-relevant="additions text">
+                            <p class="math-tutor-message assistant">¡Hola! Puedo darte pistas y explicarte las cuatro operaciones. ¿Qué quieres aprender?</p>
+                        </div>
+                        <p id="mathTutorStatus" class="math-tutor-status" role="status"></p>
+                        <form id="mathTutorForm" class="math-tutor-form">
+                            <label class="staff-sr-only" for="mathTutorInput">Pregunta al tutor de Matemáticas</label>
+                            <textarea id="mathTutorInput" maxlength="600" rows="2" placeholder="Escribe tu pregunta de matemáticas..." required></textarea>
+                            <button id="mathTutorSend" class="primary" type="submit">Preguntar</button>
+                        </form>
+                        <small class="math-tutor-privacy">No incluyas datos personales. Tu pregunta se envía de forma segura a Gemini para generar la respuesta.</small>
                     </section>
                 </section>
             </div>
