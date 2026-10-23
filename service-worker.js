@@ -1,4 +1,4 @@
-const CACHE = 'ttl-ultimate-v75';
+const CACHE = 'ttl-ultimate-v76';
 
 const FILES = [
     './',

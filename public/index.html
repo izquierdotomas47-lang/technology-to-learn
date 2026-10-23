@@ -11,7 +11,7 @@
     
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="assets/cosmo.jpg">
-    <link rel="stylesheet" href="css/estilos.css">
+    <link rel="stylesheet" href="css/estilos.css?v=78">
     <script>window.TTL_GOOGLE_CLIENT_ID = '860708338420-qaggph9h0vc3n9m7t1upbthkmiskjtvk.apps.googleusercontent.com';</script>
     <script src="https://accounts.google.com/gsi/client" async defer onload="window.dispatchEvent(new Event('google-ready'))"></script>
 </head>
@@ -131,6 +131,60 @@
             <!-- Dashboard Estudiante -->
             <div id="studentDashboard">
                 <div id="studentStats" class="stats"></div>
+                <section id="gamificationPanel" class="gamification-panel" aria-label="Progreso y misiones de aprendizaje">
+                    <div class="gamification-overview">
+                        <p class="eyebrow">TU PROGRESO</p>
+                        <div class="gamification-level"><b id="gamificationLevel">1</b><span>Nivel</span></div>
+                        <b id="gamificationTotal">0 XP</b>
+                        <div class="gamification-progress" role="progressbar" aria-label="Progreso al siguiente nivel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <i id="gamificationProgressFill"></i>
+                        </div>
+                        <small id="gamificationNextLevel">100 XP para el siguiente nivel</small>
+                        <small id="learningStreakValue">🔥 0 días de aprendizaje</small>
+                    </div>
+                    <div class="gamification-missions">
+                        <div class="gamification-heading">
+                            <div><p class="eyebrow">HOY</p><h3>Misiones diarias</h3></div>
+                            <span class="gamification-xp-reward">+15 XP cada una</span>
+                        </div>
+                        <ul id="dailyMissions" class="daily-missions" aria-label="Misiones del día"></ul>
+                        <small class="gamification-local-note">Se renuevan según la fecha local del dispositivo. El progreso se guarda en este navegador y no se sincroniza entre dispositivos.</small>
+                    </div>
+                    <div class="gamification-badges">
+                        <div class="gamification-heading">
+                            <div><p class="eyebrow">COLECCIÓN</p><h3>Insignias recientes</h3></div>
+                            <button class="secondary" data-nav="achievements" type="button">Ver logros</button>
+                        </div>
+                        <div id="recentBadges" class="recent-badges"></div>
+                    </div>
+                    <p id="gamificationAnnouncement" class="gamification-announcement" role="status" aria-live="polite"></p>
+                </section>
+
+                <section id="learningCoachPanel" class="learning-coach-panel" aria-labelledby="learningCoachTitle">
+                    <div class="learning-coach-heading">
+                        <div>
+                            <p class="eyebrow">COSMO TE ACOMPAÑA</p>
+                            <h2 id="learningCoachTitle">Tu ruta personalizada</h2>
+                            <p id="learningCoachOverview"></p>
+                        </div>
+                        <span aria-hidden="true">🧭</span>
+                    </div>
+                    <div id="learningDiagnostics" class="learning-diagnostics" aria-label="Progreso por operación"></div>
+                    <article class="learning-recommendation">
+                        <div>
+                            <p class="eyebrow">SIGUIENTE PASO</p>
+                            <h3 id="learningRecommendationTitle"></h3>
+                            <p id="learningRecommendationReason"></p>
+                            <small id="learningRecommendationActivity"></small>
+                        </div>
+                        <button id="learningRecommendationButton" class="primary" type="button">Comenzar práctica</button>
+                    </article>
+                    <details class="learning-recent-details">
+                        <summary>Ver actividades recientes</summary>
+                        <ul id="learningRecentActivities" class="learning-recent-list"></ul>
+                    </details>
+                    <small class="learning-local-note">El diagnóstico usa hasta 60 respuestas recientes y datos de práctica guardados en este navegador; no se sincroniza entre dispositivos ni determina tus calificaciones.</small>
+                </section>
                 
                 <div class="section-title">
                     <div>
@@ -181,12 +235,14 @@
                         <article class="panel free-challenge-card">
                             <div class="free-challenge-title"><span aria-hidden="true">🧩</span><div><h3>Rompecabezas espacial</h3><small>Un reto para pensar paso a paso</small></div></div>
                             <p id="puzzleQuestion"></p>
+                            <p id="puzzleFeedback" class="feedback" role="status" aria-live="polite"></p>
                             <div id="puzzleOptions" class="answers"></div>
                             <button id="newPuzzle" class="secondary" type="button">Otro rompecabezas</button>
                         </article>
                         <article class="panel free-challenge-card">
                             <div class="free-challenge-title"><span aria-hidden="true">🛒</span><div><h3>Matemáticas cotidianas</h3><small>Resuelve situaciones de la vida real</small></div></div>
                             <p id="realQuestion"></p>
+                            <p id="realFeedback" class="feedback" role="status" aria-live="polite"></p>
                             <div id="realOptions" class="answers"></div>
                             <button id="newRealQuestion" class="secondary" type="button">Otro ejercicio</button>
                         </article>
@@ -195,12 +251,12 @@
 
                 <div class="home-cards">
                     <article class="panel">
-                        <h3><span class="daily-flame" aria-hidden="true">🔥</span> Racha diaria <span class="daily-streak-value" id="dailyStreakValue">1 día</span></h3>
+                        <h3><span class="daily-flame" aria-hidden="true">🔥</span> Racha de aprendizaje <span class="daily-streak-value" id="dailyStreakValue">0 días</span></h3>
                         <p id="dailyText"></p>
                         <div class="progress"><i id="dailyProgress"></i></div>
                     </article>
                     <article class="panel calm-card">
-                        <h3>🌿 Aprende a tu ritmo</h3>
+                        <h3>✨ ¡Un mensaje para ti!</h3>
                         <p id="calmMessage" aria-live="polite"></p>
                     </article>
                 </div>
@@ -550,7 +606,7 @@
             <button class="back" data-nav="home">← Volver</button>
             <div class="panel">
                 <p class="eyebrow">GALERÍA ESPACIAL</p>
-                <h2>Mis 50 logros</h2>
+                <h2>Mis insignias y logros</h2>
                 <p class="achievement-intro">Cada práctica, misión y esfuerzo cuenta. ¡Descubre cuáles puedes desbloquear!</p>
                 <div id="achievementSummary" class="achievement-summary" aria-live="polite"></div>
                 <div id="achievementFilters" class="achievement-filters" role="group" aria-label="Filtrar logros">

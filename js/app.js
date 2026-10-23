@@ -155,22 +155,160 @@ const calmMessages = [
     '¿Preparado para superar tu récord? Elige una operación y pon a prueba tu talento.',
     'Cada respuesta te lleva más lejos. ¿Comenzamos una nueva misión?'
 ];
+const studentMotivations = [
+    '¡Tú puedes, explorador! Cada reto te acerca a una nueva estrella.',
+    '¡Qué emoción! Hoy tienes una nueva oportunidad para aprender algo genial.',
+    '¡Sigue intentando! Tu esfuerzo hace crecer tu súper mente.',
+    '¡Vamos con toda! Cada problema es una misión que puedes conquistar.',
+    '¡Eres brillante! Un paso a la vez y llegarás muy lejos.',
+    '¡No te rindas! Los grandes logros empiezan con un intento.',
+    '¡Prepárate para despegar! Hoy puedes aprender y divertirte a la vez.',
+    '¡Cada respuesta cuenta! Estás construyendo algo increíble.',
+    '¡La aventura empieza ahora! Confía en ti y prueba ese reto.',
+    '¡Tu curiosidad es un superpoder! Vamos a descubrir algo nuevo.'
+];
+
+const GAMIFICATION_RULES = Object.freeze({
+    xpPerCorrectAnswer: 5,
+    xpPerPracticeSession: 10,
+    xpPerDailyMission: 15,
+    xpPerBadge: 25,
+    firstLevelThreshold: 100,
+    levelThresholdStep: 25,
+    dailyCorrectTarget: 3,
+    dailyOperationTarget: 2,
+    operationBadgeTarget: 10
+});
+const DAILY_OPERATION_KEYS = ['add', 'subtract', 'multiply', 'divide'];
+const LEARNING_DIAGNOSTIC_RULES = Object.freeze({
+    minimumAccuracyAttempts: 5,
+    strengthAttempts: 8,
+    strengthAccuracy: 0.8,
+    recurringErrorsWindow: 5,
+    recurringErrorsTarget: 2,
+    trendWindow: 6,
+    trendGroupSize: 3,
+    trendMinimumChange: 0.2,
+    historyLimit: 60
+});
+const OPERATION_LEARNING_GUIDES = Object.freeze({
+    add: {
+        skill: 'composición y descomposición de cantidades',
+        activity: 'Practica sumas con objetos y pasos pequeños.',
+        puzzleTitle: 'Puzle de suma'
+    },
+    subtract: {
+        skill: 'diferencias y comprobación de la resta',
+        activity: 'Practica cuánto queda y comprueba la diferencia.',
+        puzzleTitle: 'Puzle de resta'
+    },
+    multiply: {
+        skill: 'grupos iguales y sumas repetidas',
+        activity: 'Practica agrupaciones iguales antes de calcular.',
+        puzzleTitle: 'Puzle de multiplicación'
+    },
+    divide: {
+        skill: 'reparto equitativo y relación con la multiplicación',
+        activity: 'Practica repartiendo objetos en grupos iguales.',
+        puzzleTitle: 'Puzle de división'
+    }
+});
+const GAMIFICATION_BADGES = [
+    { id: 'first-correct', icon: '🌟', title: 'Primera respuesta correcta', description: 'Resuelve correctamente tu primer reto.', category: 'explore', value: p => p.gamification.lifetime.correctAnswers, target: 1 },
+    { id: 'first-session', icon: '🚀', title: 'Primera misión completada', description: 'Completa una sesión regular de práctica.', category: 'explore', value: p => p.gamification.lifetime.sessionsCompleted, target: 1 },
+    { id: 'sum-explorer', icon: '➕', title: 'Explorador de las sumas', description: `Resuelve ${GAMIFICATION_RULES.operationBadgeTarget} retos de suma.`, category: 'operations', value: p => p.gamification.lifetime.operationCorrect.add, target: GAMIFICATION_RULES.operationBadgeTarget },
+    { id: 'subtraction-specialist', icon: '➖', title: 'Especialista en restas', description: `Resuelve ${GAMIFICATION_RULES.operationBadgeTarget} retos de resta.`, category: 'operations', value: p => p.gamification.lifetime.operationCorrect.subtract, target: GAMIFICATION_RULES.operationBadgeTarget },
+    { id: 'multiplication-master', icon: '✖️', title: 'Maestro de la multiplicación', description: `Resuelve ${GAMIFICATION_RULES.operationBadgeTarget} retos de multiplicación.`, category: 'operations', value: p => p.gamification.lifetime.operationCorrect.multiply, target: GAMIFICATION_RULES.operationBadgeTarget },
+    { id: 'division-expert', icon: '➗', title: 'Experto en división', description: `Resuelve ${GAMIFICATION_RULES.operationBadgeTarget} retos de división.`, category: 'operations', value: p => p.gamification.lifetime.operationCorrect.divide, target: GAMIFICATION_RULES.operationBadgeTarget },
+    { id: 'route-complete', icon: '🪐', title: 'Ruta de aprendizaje completada', description: 'Aprueba las cuatro unidades de Matemáticas.', category: 'operations', value: p => DAILY_OPERATION_KEYS.every(operation => p.operations[operation].completed) ? 1 : 0, target: 1 },
+    { id: 'daily-constancy', icon: '🔥', title: 'Constancia diaria', description: 'Mantén una racha de aprendizaje de tres días.', category: 'streak', value: p => p.gamification.learningStreak.best, target: 3 },
+    { id: 'daily-mission', icon: '🧭', title: 'Misión diaria completada', description: 'Completa una misión diaria de aprendizaje.', category: 'explore', value: p => p.gamification.lifetime.missionsCompleted, target: 1 }
+];
+
+const blankGamification = () => ({
+    version: 1,
+    xp: 0,
+    lifetime: {
+        correctAnswers: 0,
+        operationCorrect: { add: 0, subtract: 0, multiply: 0, divide: 0 },
+        sessionsCompleted: 0,
+        missionsCompleted: 0
+    },
+    learningStreak: {
+        current: 0,
+        best: 0,
+        lastActivityDate: null
+    },
+    daily: {
+        date: null,
+        correctAnswers: 0,
+        operationAnswers: { add: 0, subtract: 0, multiply: 0, divide: 0 },
+        puzzlesCorrect: 0,
+        realProblemsCorrect: 0,
+        sessionsCompleted: 0,
+        pendingReviewOperations: [],
+        reviewedCount: 0,
+        completedMissions: []
+    },
+    earnedBadges: [],
+    rewardClaims: [],
+    processedActivities: []
+});
+
+const blankLearningProfile = () => ({
+    version: 1,
+    baseline: Object.fromEntries(DAILY_OPERATION_KEYS.map(operation => [operation, { attempts: 0, correct: 0 }])),
+    attempts: []
+});
+
+const levelXpThreshold = level => {
+    const completedLevels = Math.max(0, Math.floor(level) - 1);
+    return GAMIFICATION_RULES.firstLevelThreshold * completedLevels
+        + GAMIFICATION_RULES.levelThresholdStep * completedLevels * (completedLevels - 1) / 2;
+};
+
+function levelProgress(totalXp) {
+    const xp = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, toNum(totalXp)));
+    const first = GAMIFICATION_RULES.firstLevelThreshold;
+    const step = GAMIFICATION_RULES.levelThresholdStep;
+    const offset = first - step / 2;
+    const completedLevels = Math.floor((-offset + Math.sqrt(offset ** 2 + 2 * step * xp)) / step);
+    const level = completedLevels + 1;
+    const currentThreshold = levelXpThreshold(level);
+    const nextThreshold = levelXpThreshold(level + 1);
+    const progressXp = Math.max(0, xp - currentThreshold);
+    const requiredXp = Math.max(1, nextThreshold - currentThreshold);
+    return {
+        level,
+        xp,
+        currentThreshold,
+        nextThreshold,
+        progressXp,
+        requiredXp,
+        remainingXp: Math.max(0, nextThreshold - xp),
+        percentage: Math.min(100, Math.round(progressXp / requiredXp * 100))
+    };
+}
 
 let db = null;
 let userId = null;
 let lastCalmMessage = '';
+let lastStudentMotivation = '';
+const gamificationAnnouncements = new Map();
 
 const blankProgress = () => ({
     points: 0, stars: 0, total: 0, correct: 0, time: 0, maxLevel: 1, 
     dailyStreak: 1, bestStreak: 1, todayCorrect: 0, lastDate: null, 
     perfectMissions: 0, puzzles: 0, realProblems: 0, 
+    learningProfile: blankLearningProfile(),
     operations: {
         add: { total: 0, correct: 0, completed: false, grade: null, bestGrade: 0 }, 
         subtract: { total: 0, correct: 0, completed: false, grade: null, bestGrade: 0 }, 
         multiply: { total: 0, correct: 0, completed: false, grade: null, bestGrade: 0 }, 
         divide: { total: 0, correct: 0, completed: false, grade: null, bestGrade: 0 }
     },
-    assessment: { attempts: 0, best: 0, last: 0, lastGrade: null, bestGrade: 0, completed: false }
+    assessment: { attempts: 0, best: 0, last: 0, lastGrade: null, bestGrade: 0, completed: false },
+    gamification: blankGamification()
 });
 
 const seed = {
@@ -238,6 +376,15 @@ function loadDB() {
                 ? normalizeProgress(user.progress)
                 : (user.progress && typeof user.progress === 'object' ? user.progress : {})
         };
+    });
+
+    db.users.forEach(user => {
+        const gamification = user.progress?.gamification;
+        if (user.role !== 'student' || !gamification?.migrationPending) return;
+        GAMIFICATION_BADGES.forEach(badge => {
+            if (toNum(badge.value(user.progress)) >= badge.target) gamification.earnedBadges.push(badge.id);
+        });
+        gamification.migrationPending = false;
     });
 
     saveDB();
@@ -404,13 +551,95 @@ function setupGoogleAuth() {
 }
 
 // Guarantee a complete, numeric progress object (self-healing for old/corrupt data)
+function normalizeGamification(source, progress) {
+    const defaults = blankGamification();
+    const hasSavedState = source && typeof source === 'object';
+    const lifetime = hasSavedState && source.lifetime && typeof source.lifetime === 'object' ? source.lifetime : {};
+    const savedDaily = hasSavedState && source.daily && typeof source.daily === 'object' ? source.daily : {};
+    const savedStreak = hasSavedState && source.learningStreak && typeof source.learningStreak === 'object' ? source.learningStreak : {};
+    const operations = (values, legacyValues = {}) => Object.fromEntries(DAILY_OPERATION_KEYS.map(operation => [
+        operation,
+        Math.max(0, Math.floor(toNum(values?.[operation], toNum(legacyValues?.[operation]?.correct))))
+    ]));
+    const safeIds = values => Array.isArray(values)
+        ? [...new Set(values.filter(value => typeof value === 'string' && value.length <= 180))]
+        : [];
+    const dailyDate = /^\d{4}-\d{2}-\d{2}$/.test(savedDaily.date || '') ? savedDaily.date : null;
+
+    return {
+        ...defaults,
+        version: 1,
+        xp: Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, toNum(source?.xp))),
+        lifetime: {
+            correctAnswers: Math.max(0, Math.floor(toNum(lifetime.correctAnswers,
+                hasSavedState ? 0 : toNum(progress.correct) + toNum(progress.puzzles) + toNum(progress.realProblems)))),
+            operationCorrect: operations(lifetime.operationCorrect, hasSavedState ? {} : progress.operations),
+            sessionsCompleted: Math.max(0, Math.floor(toNum(lifetime.sessionsCompleted))),
+            missionsCompleted: Math.max(0, Math.floor(toNum(lifetime.missionsCompleted)))
+        },
+        learningStreak: {
+            current: Math.max(0, Math.floor(toNum(savedStreak.current))),
+            best: Math.max(0, Math.floor(toNum(savedStreak.best))),
+            lastActivityDate: /^\d{4}-\d{2}-\d{2}$/.test(savedStreak.lastActivityDate || '') ? savedStreak.lastActivityDate : null
+        },
+        daily: {
+            ...defaults.daily,
+            date: dailyDate,
+            correctAnswers: Math.max(0, Math.floor(toNum(savedDaily.correctAnswers))),
+            operationAnswers: operations(savedDaily.operationAnswers),
+            puzzlesCorrect: Math.max(0, Math.floor(toNum(savedDaily.puzzlesCorrect))),
+            realProblemsCorrect: Math.max(0, Math.floor(toNum(savedDaily.realProblemsCorrect))),
+            sessionsCompleted: Math.max(0, Math.floor(toNum(savedDaily.sessionsCompleted))),
+            pendingReviewOperations: safeIds(savedDaily.pendingReviewOperations)
+                .filter(operation => DAILY_OPERATION_KEYS.includes(operation)),
+            reviewedCount: Math.max(0, Math.floor(toNum(savedDaily.reviewedCount))),
+            completedMissions: safeIds(savedDaily.completedMissions)
+        },
+        earnedBadges: safeIds(source?.earnedBadges),
+        rewardClaims: safeIds(source?.rewardClaims).slice(-3000),
+        processedActivities: safeIds(source?.processedActivities).slice(-3000),
+        migrationPending: !hasSavedState
+    };
+}
+
+function normalizeLearningProfile(source, progress) {
+    const profile = source && typeof source === 'object' ? source : {};
+    const baselineSource = profile.baseline && typeof profile.baseline === 'object'
+        ? profile.baseline
+        : progress.operations;
+    const baseline = Object.fromEntries(DAILY_OPERATION_KEYS.map(operation => {
+        const values = baselineSource?.[operation] || {};
+        const attempts = Math.max(0, Math.floor(toNum(values.attempts, toNum(values.total))));
+        const correct = Math.min(attempts, Math.max(0, Math.floor(toNum(values.correct))));
+        return [operation, { attempts, correct }];
+    }));
+    const attempts = (Array.isArray(profile.attempts) ? profile.attempts : [])
+        .filter(item => item && typeof item === 'object'
+            && typeof item.id === 'string'
+            && DAILY_OPERATION_KEYS.includes(item.operation))
+        .map(item => ({
+            id: item.id.slice(0, 180),
+            date: /^\d{4}-\d{2}-\d{2}$/.test(item.date || '') ? item.date : todayISO(),
+            operation: item.operation,
+            correct: item.correct === true,
+            source: ['quiz', 'puzzle', 'real-problem'].includes(item.source) ? item.source : 'quiz',
+            level: Math.min(3, Math.max(1, Math.floor(toNum(item.level, 1)))),
+            expression: typeof item.expression === 'string' ? item.expression.slice(0, 120) : '',
+            studentAnswer: typeof item.studentAnswer === 'string' ? item.studentAnswer.slice(0, 40) : '',
+            correctAnswer: typeof item.correctAnswer === 'string' ? item.correctAnswer.slice(0, 40) : '',
+            reviewedAt: /^\d{4}-\d{2}-\d{2}$/.test(item.reviewedAt || '') ? item.reviewedAt : null
+        }))
+        .slice(-LEARNING_DIAGNOSTIC_RULES.historyLimit);
+    return { version: 1, baseline, attempts };
+}
+
 function normalizeProgress(progress) {
     const base = blankProgress();
     if (!progress || typeof progress !== 'object') return base;
 
     const merged = { ...base };
     for (const key of Object.keys(base)) {
-        if (key === 'operations' || key === 'lastDate' || key === 'assessment') continue;
+        if (key === 'operations' || key === 'lastDate' || key === 'assessment' || key === 'gamification' || key === 'learningProfile') continue;
         merged[key] = toNum(progress[key], base[key]);
     }
     merged.lastDate = typeof progress.lastDate === 'string' ? progress.lastDate : null;
@@ -446,7 +675,511 @@ function normalizeProgress(progress) {
             : Math.min(5, Math.max(0, toNum(assessment.bestGrade))),
         completed: assessment.completed === true
     };
+    merged.gamification = normalizeGamification(progress.gamification, merged);
+    merged.learningProfile = normalizeLearningProfile(progress.learningProfile, merged);
     return merged;
+}
+
+function resetDailyMissions(user) {
+    if (!user?.progress?.gamification) return false;
+    const daily = user.progress.gamification.daily;
+    const today = todayISO();
+    if (daily.date === today) return false;
+    user.progress.gamification.daily = {
+        ...blankGamification().daily,
+        date: today
+    };
+    return true;
+}
+
+function xpLevelUpMessage(previousLevel, nextLevel) {
+    if (nextLevel <= previousLevel) return [];
+    const messages = [
+        '¡Nivel nuevo desbloqueado! Cosmo celebra tu esfuerzo.',
+        '¡Subiste de nivel! Cada práctica te lleva más lejos.',
+        '¡Despegaste al siguiente nivel con tus aprendizajes!'
+    ];
+    return [`${randomItem(messages)} Ahora estás en el nivel ${nextLevel}.`];
+}
+
+function awardExperience(user, amount, claimId) {
+    const gamification = user.progress.gamification;
+    if (gamification.rewardClaims.includes(claimId)) return [];
+    const before = levelProgress(gamification.xp).level;
+    gamification.rewardClaims.push(claimId);
+    if (gamification.rewardClaims.length > 3000) gamification.rewardClaims.splice(0, gamification.rewardClaims.length - 3000);
+    gamification.xp = Math.min(Number.MAX_SAFE_INTEGER, gamification.xp + amount);
+    const after = levelProgress(gamification.xp).level;
+    const amountMessage = `Ganaste ${amount} XP.`;
+    return [amountMessage, ...xpLevelUpMessage(before, after)];
+}
+
+function dailyMissionProgress(user, missionId) {
+    const daily = user.progress.gamification.daily;
+    if (missionId === 'correct-answers') return daily.correctAnswers;
+    if (missionId === 'operation-focus') return Math.max(...DAILY_OPERATION_KEYS.map(operation => daily.operationAnswers[operation]));
+    if (missionId === 'practice-session') return daily.sessionsCompleted;
+    if (missionId === 'free-challenges') return Math.min(daily.puzzlesCorrect, 1) + Math.min(daily.realProblemsCorrect, 1);
+    if (missionId === 'review-answer') return daily.reviewedCount;
+    return 0;
+}
+
+function dailyMissionCatalog(user) {
+    const missions = [
+        { id: 'correct-answers', title: 'Aciertos estelares', description: `Resuelve ${GAMIFICATION_RULES.dailyCorrectTarget} ejercicios correctamente.`, target: GAMIFICATION_RULES.dailyCorrectTarget },
+        { id: 'operation-focus', title: 'Enfócate en una operación', description: `Resuelve ${GAMIFICATION_RULES.dailyOperationTarget} retos de la misma operación.`, target: GAMIFICATION_RULES.dailyOperationTarget },
+        user.premium
+            ? { id: 'practice-session', title: 'Completa una sesión', description: 'Termina una sesión de práctica regular.', target: 1 }
+            : { id: 'free-challenges', title: 'Explora dos tipos de reto', description: 'Resuelve un puzle y un reto cotidiano.', target: 2 }
+    ];
+    const daily = user.progress.gamification.daily;
+    if (daily.pendingReviewOperations.length || daily.reviewedCount > 0 || daily.completedMissions.includes('review-answer')) {
+        missions.push({
+            id: 'review-answer',
+            title: 'Revisa y vuelve a intentar',
+            description: 'Después de un error, resuelve un nuevo reto de esa operación.',
+            target: 1
+        });
+    }
+    return missions.map(mission => ({
+        ...mission,
+        progress: Math.min(mission.target, dailyMissionProgress(user, mission.id)),
+        complete: daily.completedMissions.includes(mission.id)
+    }));
+}
+
+function checkDailyMissionRewards(user) {
+    const daily = user.progress.gamification.daily;
+    const messages = [];
+    dailyMissionCatalog(user).forEach(mission => {
+        if (mission.progress < mission.target || daily.completedMissions.includes(mission.id)) return;
+        const claimId = `mission:${daily.date}:${mission.id}`;
+        if (user.progress.gamification.rewardClaims.includes(claimId)) {
+            daily.completedMissions.push(mission.id);
+            return;
+        }
+        daily.completedMissions.push(mission.id);
+        user.progress.gamification.lifetime.missionsCompleted++;
+        const rewardMessages = awardExperience(
+            user,
+            GAMIFICATION_RULES.xpPerDailyMission,
+            claimId
+        );
+        const praises = ['¡Misión diaria completada!', '¡Objetivo del día conseguido!', '¡Una misión más en tu bitácora!'];
+        messages.push(`${randomItem(praises)} ${mission.title}.`, ...rewardMessages.slice(0, 1), ...rewardMessages.slice(1));
+    });
+    return messages;
+}
+
+function checkBadgeUnlocks(user, { grantRewards = true } = {}) {
+    const gamification = user.progress.gamification;
+    const messages = [];
+    GAMIFICATION_BADGES.forEach(badge => {
+        if (gamification.earnedBadges.includes(badge.id)
+            || toNum(badge.value(user.progress)) < badge.target) return;
+        gamification.earnedBadges.push(badge.id);
+        if (!grantRewards) return;
+        const rewardMessages = awardExperience(user, GAMIFICATION_RULES.xpPerBadge, `badge:${badge.id}`);
+        messages.push(`¡Insignia nueva: ${badge.title}!`, ...rewardMessages);
+    });
+    return messages;
+}
+
+function completePracticeSession(user, sessionId) {
+    const gamification = user.progress.gamification;
+    const claimId = `session:${sessionId}`;
+    if (gamification.rewardClaims.includes(claimId)) return [];
+    resetDailyMissions(user);
+    gamification.lifetime.sessionsCompleted++;
+    gamification.daily.sessionsCompleted++;
+    const messages = awardExperience(user, GAMIFICATION_RULES.xpPerPracticeSession, claimId);
+    const praises = ['¡Sesión completada! Tu esfuerzo cuenta.', '¡Cerraste la misión con dedicación!', '¡Gran trabajo: terminaste tu práctica!'];
+    messages.unshift(randomItem(praises));
+    messages.push(...checkDailyMissionRewards(user), ...checkBadgeUnlocks(user));
+    saveDB();
+    return messages;
+}
+
+function recordPersonalizedAttempt(user, {
+    activityId, operation, correct, source, level, expression, studentAnswer, correctAnswer
+}) {
+    const attempts = user.progress.learningProfile.attempts;
+    const latestUnreviewedMistake = [...attempts].reverse().find(attempt =>
+        !attempt.correct && !attempt.reviewedAt && attempt.operation === operation
+        && attempt.expression !== expression
+    );
+    if (correct && latestUnreviewedMistake) latestUnreviewedMistake.reviewedAt = todayISO();
+    attempts.push({
+        id: activityId,
+        date: todayISO(),
+        operation,
+        correct: correct === true,
+        source,
+        level: Math.min(3, Math.max(1, Math.floor(toNum(level, 1)))),
+        expression: String(expression || '').slice(0, 120),
+        studentAnswer: String(studentAnswer ?? '').slice(0, 40),
+        correctAnswer: String(correctAnswer ?? '').slice(0, 40),
+        reviewedAt: null
+    });
+    if (attempts.length > LEARNING_DIAGNOSTIC_RULES.historyLimit) {
+        attempts.splice(0, attempts.length - LEARNING_DIAGNOSTIC_RULES.historyLimit);
+    }
+}
+
+function recordLearningActivity(user, {
+    activityId, operation, correct, source, level, expression, studentAnswer, correctAnswer
+}) {
+    if (!user || user.role !== 'student' || !user.progress?.gamification
+        || typeof activityId !== 'string' || !activityId) return [];
+    resetDailyMissions(user);
+    const gamification = user.progress.gamification;
+    if (gamification.processedActivities.includes(activityId)) return [];
+    gamification.processedActivities.push(activityId);
+    if (gamification.processedActivities.length > 3000) {
+        gamification.processedActivities.splice(0, gamification.processedActivities.length - 3000);
+    }
+    if (DAILY_OPERATION_KEYS.includes(operation)) {
+        recordPersonalizedAttempt(user, {
+            activityId, operation, correct, source, level, expression, studentAnswer, correctAnswer
+        });
+    }
+    const daily = gamification.daily;
+    const operationIsKnown = DAILY_OPERATION_KEYS.includes(operation);
+    const messages = [];
+    recordLearningDay(user);
+
+    if (correct) {
+        daily.correctAnswers++;
+        gamification.lifetime.correctAnswers++;
+        if (operationIsKnown) {
+            daily.operationAnswers[operation]++;
+            gamification.lifetime.operationCorrect[operation]++;
+            if (daily.pendingReviewOperations.includes(operation)) {
+                daily.pendingReviewOperations = daily.pendingReviewOperations.filter(item => item !== operation);
+                daily.reviewedCount++;
+            }
+        }
+        if (source === 'puzzle') daily.puzzlesCorrect++;
+        if (source === 'real-problem') daily.realProblemsCorrect++;
+        messages.push(...awardExperience(
+            user,
+            GAMIFICATION_RULES.xpPerCorrectAnswer,
+            `answer:${activityId}`
+        ));
+    } else if (operationIsKnown && !daily.pendingReviewOperations.includes(operation)) {
+        daily.pendingReviewOperations.push(operation);
+    }
+
+    messages.push(...checkDailyMissionRewards(user));
+    messages.push(...checkBadgeUnlocks(user));
+    saveDB();
+    return messages;
+}
+
+function recordLearningDay(user) {
+    const streak = user.progress.gamification.learningStreak;
+    const today = todayISO();
+    if (streak.lastActivityDate === today) return;
+    streak.current = streak.lastActivityDate === todayISO(-1) ? streak.current + 1 : 1;
+    streak.best = Math.max(streak.best, streak.current);
+    streak.lastActivityDate = today;
+}
+
+function currentLearningStreak(user) {
+    const streak = user.progress.gamification.learningStreak;
+    return [todayISO(), todayISO(-1)].includes(streak.lastActivityDate) ? streak.current : 0;
+}
+
+function announceGamification(user, messages) {
+    const text = messages.filter(Boolean).join(' ');
+    if (!text) {
+        if (currentUser()?.id === user?.id && $('#home').classList.contains('active')) {
+            renderGamification(user);
+            renderPersonalizedLearning(user);
+        }
+        return;
+    }
+    gamificationAnnouncements.set(user.id, text);
+    const announcement = $('#gamificationAnnouncement');
+    if (currentUser()?.id !== user.id) return;
+    if ($('#home').classList.contains('active')) {
+        renderGamification(user);
+        renderPersonalizedLearning(user);
+    }
+    if (announcement) announcement.textContent = text;
+    const milestone = messages.some(message => /misión diaria completada|insignia nueva|nivel nuevo|subiste de nivel|despegaste al siguiente nivel/i.test(message));
+    const panel = $('#gamificationPanel');
+    if (milestone && panel && $('#home').classList.contains('active') && !motionReduced()) {
+        panel.classList.remove('is-celebrating');
+        void panel.offsetWidth;
+        panel.classList.add('is-celebrating');
+        setTimeout(() => panel.classList.remove('is-celebrating'), 750);
+    }
+}
+
+function calendarDaysBetween(fromDate, toDate) {
+    const parseDay = value => {
+        if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+        const [year, month, day] = value.split('-').map(Number);
+        return Date.UTC(year, month - 1, day);
+    };
+    const from = parseDay(fromDate);
+    const to = parseDay(toDate);
+    return from === null || to === null ? 0 : Math.max(0, Math.round((to - from) / 86400000));
+}
+
+function operationLearningAnalysis(user, operation) {
+    const baseline = user.progress.learningProfile.baseline[operation];
+    const history = user.progress.learningProfile.attempts.filter(attempt => attempt.operation === operation);
+    const attempts = baseline.attempts + history.length;
+    const correct = baseline.correct + history.filter(attempt => attempt.correct).length;
+    const recent = history.slice(-LEARNING_DIAGNOSTIC_RULES.trendWindow);
+    const recentWindow = recent.slice(-LEARNING_DIAGNOSTIC_RULES.recurringErrorsWindow);
+    const recentErrors = recentWindow.filter(attempt => !attempt.correct);
+    const accuracy = attempts ? correct / attempts : null;
+    const recentAccuracy = recent.length
+        ? recent.filter(attempt => attempt.correct).length / recent.length
+        : null;
+    let trend = null;
+    if (recent.length >= LEARNING_DIAGNOSTIC_RULES.trendWindow) {
+        const groupSize = LEARNING_DIAGNOSTIC_RULES.trendGroupSize;
+        const earlier = recent.slice(0, groupSize);
+        const latest = recent.slice(-groupSize);
+        const change = latest.filter(attempt => attempt.correct).length / groupSize
+            - earlier.filter(attempt => attempt.correct).length / groupSize;
+        if (change >= LEARNING_DIAGNOSTIC_RULES.trendMinimumChange) trend = 'improving';
+        else if (change <= -LEARNING_DIAGNOSTIC_RULES.trendMinimumChange) trend = 'needs-attention';
+        else trend = 'steady';
+    }
+
+    let status = 'exploring';
+    if (recentErrors.length >= LEARNING_DIAGNOSTIC_RULES.recurringErrorsTarget
+        || (attempts >= LEARNING_DIAGNOSTIC_RULES.minimumAccuracyAttempts && accuracy < 0.6)) {
+        status = 'reinforce';
+    } else if (attempts >= LEARNING_DIAGNOSTIC_RULES.strengthAttempts
+        && accuracy >= LEARNING_DIAGNOSTIC_RULES.strengthAccuracy) {
+        status = 'strength';
+    } else if (attempts > 0) {
+        status = 'practicing';
+    }
+
+    return {
+        operation, attempts, correct, accuracy, recent, recentErrors, recentAccuracy, trend, status
+    };
+}
+
+function operationRecommendation(user, operation) {
+    const analysis = operationLearningAnalysis(user, operation);
+    const guide = OPERATION_LEARNING_GUIDES[operation];
+    let reason;
+    if (analysis.recentErrors.length >= LEARNING_DIAGNOSTIC_RULES.recurringErrorsTarget) {
+        reason = `En tus ${analysis.recent.length} respuestas recientes de ${operationInfo[operation].name.toLowerCase()} hubo ${analysis.recentErrors.length} errores.`;
+    } else if (analysis.accuracy !== null
+        && analysis.attempts >= LEARNING_DIAGNOSTIC_RULES.minimumAccuracyAttempts
+        && analysis.accuracy < 0.6) {
+        reason = `La precisión registrada es ${Math.round(analysis.accuracy * 100)}% en ${analysis.attempts} respuestas; conviene reforzar este paso.`;
+    } else if (analysis.status === 'strength') {
+        reason = `Has acertado ${Math.round(analysis.accuracy * 100)}% en ${analysis.attempts} respuestas registradas; puedes probar un reto un poco más avanzado.`;
+    } else if (analysis.attempts) {
+        reason = `Hay ${analysis.attempts} respuestas registradas; unos ejercicios más ayudarán a orientar mejor esta práctica.`;
+    } else {
+        reason = 'Aún no hay respuestas registradas para esta operación. Empieza con un reto breve y observa cómo te va.';
+    }
+    return {
+        operation,
+        title: `${operationInfo[operation].name}: ${guide.skill}`,
+        reason,
+        activity: guide.activity
+    };
+}
+
+function recommendedOperation(user) {
+    const analyses = DAILY_OPERATION_KEYS.map(operation => operationLearningAnalysis(user, operation));
+    const recurringError = analyses
+        .filter(analysis => analysis.recentErrors.length >= LEARNING_DIAGNOSTIC_RULES.recurringErrorsTarget)
+        .sort((a, b) => b.recentErrors.length - a.recentErrors.length)[0];
+    if (recurringError) return recurringError.operation;
+
+    const lowAccuracy = analyses
+        .filter(analysis => analysis.attempts >= LEARNING_DIAGNOSTIC_RULES.minimumAccuracyAttempts)
+        .sort((a, b) => a.accuracy - b.accuracy)[0];
+    if (lowAccuracy && lowAccuracy.accuracy < 0.6) return lowAccuracy.operation;
+
+    return analyses.sort((a, b) => a.attempts - b.attempts)[0].operation;
+}
+
+function practiceLevelFor(user, operation, selectedLevel) {
+    const selected = Math.min(3, Math.max(1, Math.floor(toNum(selectedLevel, 1))));
+    const analysis = operationLearningAnalysis(user, operation);
+    if (analysis.recent.length < LEARNING_DIAGNOSTIC_RULES.recurringErrorsWindow) return selected;
+    if (analysis.recentErrors.length >= LEARNING_DIAGNOSTIC_RULES.recurringErrorsTarget) {
+        return Math.max(1, selected - 1);
+    }
+    if (analysis.attempts >= LEARNING_DIAGNOSTIC_RULES.strengthAttempts
+        && analysis.recentAccuracy >= LEARNING_DIAGNOSTIC_RULES.strengthAccuracy
+        && analysis.status === 'strength') {
+        return Math.min(3, selected + 1);
+    }
+    return selected;
+}
+
+function renderPersonalizedLearning(user) {
+    const profile = user.progress.learningProfile;
+    const totalRecorded = DAILY_OPERATION_KEYS.reduce((sum, operation) =>
+        sum + operationLearningAnalysis(user, operation).attempts, 0);
+    $('#learningCoachOverview').textContent = totalRecorded
+        ? `Orientación basada en ${totalRecorded} respuestas reales guardadas. El nivel y las notas oficiales no se deducen de una sola respuesta.`
+        : 'Aún no hay respuestas registradas. Practica y Cosmo usará tus resultados para recomendar el siguiente paso.';
+
+    const statusLabels = {
+        exploring: 'Vamos a practicar',
+        reinforce: 'Conviene reforzar',
+        practicing: 'En práctica',
+        strength: 'Fortaleza observada'
+    };
+    const trendLabels = {
+        improving: 'Mejora en las últimas respuestas',
+        steady: 'Ritmo estable en las últimas respuestas',
+        'needs-attention': 'Revisemos los últimos resultados'
+    };
+    $('#learningDiagnostics').innerHTML = DAILY_OPERATION_KEYS.map(operation => {
+        const analysis = operationLearningAnalysis(user, operation);
+        const accuracyLabel = analysis.attempts >= LEARNING_DIAGNOSTIC_RULES.minimumAccuracyAttempts
+            ? `${Math.round(analysis.accuracy * 100)}% de precisión`
+            : `${analysis.attempts} ${analysis.attempts === 1 ? 'respuesta registrada' : 'respuestas registradas'}`;
+        const details = analysis.trend
+            ? trendLabels[analysis.trend]
+            : analysis.attempts < LEARNING_DIAGNOSTIC_RULES.minimumAccuracyAttempts
+                ? `Necesitamos ${LEARNING_DIAGNOSTIC_RULES.minimumAccuracyAttempts - analysis.attempts} respuestas más para calcular la precisión.`
+                : analysis.recent.length
+                    ? `${analysis.recentErrors.length} errores en las últimas ${analysis.recent.length} respuestas registradas.`
+                    : 'Los datos anteriores muestran la precisión general; aún no hay respuestas recientes registradas.';
+        return `<article class="learning-operation ${analysis.status}">
+            <div><b>${escapeHTML(operationInfo[operation].name)}</b><span>${escapeHTML(statusLabels[analysis.status])}</span></div>
+            <small>${escapeHTML(accuracyLabel)} · ${escapeHTML(details)}</small>
+            <button type="button" class="secondary" data-learning-practice="${operation}">Practicar ${escapeHTML(operationInfo[operation].name.toLowerCase())}</button>
+        </article>`;
+    }).join('');
+
+    const operation = recommendedOperation(user);
+    const recommendation = operationRecommendation(user, operation);
+    $('#learningRecommendationTitle').textContent = recommendation.title;
+    $('#learningRecommendationReason').textContent = recommendation.reason;
+    $('#learningRecommendationActivity').textContent = recommendation.activity;
+    $('#learningRecommendationButton').dataset.learningPractice = operation;
+
+    const recent = profile.attempts.slice(-4).reverse();
+    $('#learningRecentActivities').innerHTML = recent.length
+        ? recent.map(attempt => `<li class="${attempt.correct ? 'is-correct' : 'needs-review'}">
+            <span>${escapeHTML(operationInfo[attempt.operation].name)} · ${escapeHTML(attempt.expression || 'Reto de práctica')}</span>
+            <small>${attempt.correct
+                ? `Respuesta correcta: ${escapeHTML(attempt.studentAnswer || attempt.correctAnswer)}`
+                : `Tu respuesta: ${escapeHTML(attempt.studentAnswer || 'Sin respuesta')} · Resultado: ${escapeHTML(attempt.correctAnswer || 'revisar')}`}</small>
+            <time datetime="${escapeHTML(attempt.date)}">${escapeHTML(attempt.date)}</time>
+        </li>`).join('')
+        : '<li class="learning-empty-state">Tus ejercicios recientes aparecerán aquí después de practicar.</li>';
+}
+
+function beginRecommendedPractice(operation) {
+    const user = currentUser();
+    if (!user || !DAILY_OPERATION_KEYS.includes(operation)) return;
+    if (user.premium) {
+        const unlockedIndex = operationKeys.findIndex(item => user.progress.operations[item]?.completed !== true);
+        const requestedIndex = operationKeys.indexOf(operation);
+        if (user.progress.operations[operation]?.completed || requestedIndex === unlockedIndex) {
+            currentOperation = operation;
+            startQuiz('practice');
+            return;
+        }
+    }
+
+    $('#freeMathContent')?.classList.remove('hidden');
+    $('#englishSubjectNotice')?.classList.add('hidden');
+    $('#mathSubjectButton')?.setAttribute('aria-expanded', 'true');
+    $('#mathSubjectButton')?.setAttribute('aria-pressed', 'true');
+    $('#englishSubjectButton')?.setAttribute('aria-expanded', 'false');
+    $('#englishSubjectButton')?.setAttribute('aria-pressed', 'false');
+    $('#mathSubjectButton')?.classList.add('selected');
+    $('#englishSubjectButton')?.classList.remove('selected');
+    newPuzzle(operation);
+    requestAnimationFrame(() => $('#puzzleQuestion')?.scrollIntoView({
+        behavior: motionReduced() ? 'auto' : 'smooth',
+        block: 'center'
+    }));
+}
+
+function buildLocalMathExplanation(question) {
+    const { operation, a, b, answer } = question;
+    const steps = {
+        add: `Empieza con ${a} y cuenta ${b} más. La suma es ${answer}.`,
+        subtract: `Empieza con ${a} y quita ${b}. Comprueba cuánto queda: ${answer}.`,
+        multiply: `Forma ${a} grupos de ${b}. Puedes sumar ${b} ${a} veces; en total son ${answer}.`,
+        divide: `Reparte ${a} en ${b} grupos iguales. Cada grupo recibe ${answer}.`
+    };
+    return steps[operation] || `Revisa el ejercicio paso a paso. El resultado correcto es ${answer}.`;
+}
+
+function buildLocalMathHint(question) {
+    const prompts = {
+        add: `Empieza con ${question.a} y cuenta ${question.b} pasos hacia adelante.`,
+        subtract: `Empieza en ${question.a} y cuenta ${question.b} pasos hacia atrás.`,
+        multiply: `Dibuja ${question.a} grupos iguales con ${question.b} objetos en cada uno.`,
+        divide: `Dibuja ${question.a} objetos y repártelos por igual entre ${question.b} grupos.`
+    };
+    return prompts[question.operation] || 'Representa el ejercicio con dibujos y resuélvelo paso a paso.';
+}
+
+function mathTutorLearningContext(user, operation, level) {
+    if (!DAILY_OPERATION_KEYS.includes(operation)) return undefined;
+    const analysis = operationLearningAnalysis(user, operation);
+    return {
+        operation: operationInfo[operation].name,
+        focus: OPERATION_LEARNING_GUIDES[operation].skill,
+        teachingApproach: OPERATION_LEARNING_GUIDES[operation].activity,
+        evidence: analysis.attempts >= LEARNING_DIAGNOSTIC_RULES.minimumAccuracyAttempts
+            ? analysis.status
+            : 'limited',
+        recentErrors: analysis.recentErrors.length,
+        practiceLevel: Math.min(3, Math.max(1, Math.floor(toNum(level, 1))))
+    };
+}
+
+function renderGamification(user) {
+    const progress = levelProgress(user.progress.gamification.xp);
+    $('#gamificationLevel').textContent = String(progress.level);
+    $('#gamificationTotal').textContent = `${progress.xp.toLocaleString('es-CO')} XP`;
+    $('#gamificationProgressFill').style.width = `${progress.percentage}%`;
+    const levelBar = $('#gamificationProgressFill').parentElement;
+    levelBar.setAttribute('aria-valuenow', String(progress.percentage));
+    $('#gamificationNextLevel').textContent = `Faltan ${progress.remainingXp.toLocaleString('es-CO')} XP para el nivel ${progress.level + 1}`;
+    const learningStreak = user.progress.gamification.learningStreak;
+    const activeStreak = currentLearningStreak(user);
+    $('#learningStreakValue').textContent = `🔥 ${activeStreak} ${activeStreak === 1 ? 'día' : 'días'} de aprendizaje`;
+
+    const missions = dailyMissionCatalog(user);
+    $('#dailyMissions').innerHTML = missions.map(mission => {
+        const status = mission.complete ? 'Completada' : mission.progress > 0 ? 'En progreso' : 'Pendiente';
+        return `<li class="daily-mission${mission.complete ? ' complete' : ''}">
+            <div class="daily-mission-copy">
+                <b>${escapeHTML(mission.title)}</b>
+                <small>${escapeHTML(mission.description)}</small>
+            </div>
+            <div class="daily-mission-progress">
+                <span>${mission.progress}/${mission.target}</span>
+                <small>${status}</small>
+            </div>
+        </li>`;
+    }).join('');
+
+    const badgeElements = user.progress.gamification.earnedBadges
+        .map(id => GAMIFICATION_BADGES.find(badge => badge.id === id))
+        .filter(Boolean)
+        .slice(-3)
+        .reverse();
+    $('#recentBadges').innerHTML = badgeElements.length
+        ? badgeElements.map(badge => `<span class="recent-badge" title="${escapeHTML(badge.title)}"><i aria-hidden="true">${badge.icon}</i><small>${escapeHTML(badge.title)}</small></span>`).join('')
+        : '<p class="no-recent-badges">Tu primera insignia te espera en la próxima misión.</p>';
+    $('#gamificationAnnouncement').textContent = gamificationAnnouncements.get(user.id) || '';
 }
 
 // Daily streak + daily goal: resets todayCorrect and updates the streak once per day
@@ -460,7 +1193,11 @@ function applyDailyReset(user) {
 
     const p = user.progress;
     const today = todayISO();
-    if (p.lastDate === today) return;
+    const missionsReset = resetDailyMissions(user);
+    if (p.lastDate === today) {
+        if (missionsReset) saveDB();
+        return;
+    }
 
     if (p.lastDate === todayISO(-1)) {
         p.dailyStreak = toNum(p.dailyStreak, 1) + 1;
@@ -524,35 +1261,58 @@ if ('speechSynthesis' in window) {
 function spanishVoice() {
     if (!cachedVoices.length) refreshVoices();
     const voices = cachedVoices;
-    const spanishVoices = voices.filter(voice => voice.lang.toLowerCase().startsWith('es'));
-    const preferredNames = ['sabina', 'laura', 'paulina', 'monica', 'sofia', 'lucia', 'elena', 'helena', 'ximena'];
-    return preferredNames.map(name => spanishVoices.find(voice => voice.name.toLowerCase().includes(name))).find(Boolean)
-        || spanishVoices.find(voice => /es-(mx|co|us)/i.test(voice.lang) && voice.localService)
+    const spanishVoices = voices.filter(voice => voice.lang && voice.lang.toLowerCase().startsWith('es'));
+    const preferredMaleNames = ['diego', 'jorge', 'carlos', 'sergio', 'alejandro', 'miguel', 'daniel', 'ricardo', 'martin', 'victor'];
+    const preferredFemaleNames = ['sabina', 'laura', 'paulina', 'monica', 'sofia', 'lucia', 'elena', 'helena', 'ximena'];
+    const preferredNames = [...preferredMaleNames, ...preferredFemaleNames];
+    const normalizeVoiceName = voice => String(voice?.name || '').toLowerCase();
+
+    const localLatin = spanishVoices.filter(voice => /es-(mx|co|ar|cl|pe|ec|uy|gt|do|pr|pa)/i.test(voice.lang) && voice.localService);
+    const selectedMale = preferredMaleNames
+        .map(name => localLatin.find(voice => normalizeVoiceName(voice).includes(name)))
+        .find(Boolean)
+        || localLatin.find(voice => /male|man|hombre|varon/i.test(normalizeVoiceName(voice)))
+        || spanishVoices.find(voice => preferredMaleNames.some(name => normalizeVoiceName(voice).includes(name)));
+
+    if (selectedMale) return selectedMale;
+
+    const selectedGeneric = preferredNames
+        .map(name => spanishVoices.find(voice => normalizeVoiceName(voice).includes(name)))
+        .find(Boolean)
+        || spanishVoices.find(voice => /es-(mx|co|us|ar|cl)/i.test(voice.lang) && voice.localService)
         || spanishVoices.find(voice => voice.localService)
+        || spanishVoices.find(voice => voice.lang && voice.lang.toLowerCase().startsWith('es'))
         || spanishVoices[0];
+
+    return selectedGeneric;
 }
 
 function speak(text, options = {}) {
     const user = currentUser();
     if (!user?.settings?.audio) return;
     if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return;
-    
+
     try { speechSynthesis.cancel(); } catch {}
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
     const voice = spanishVoice();
-    
+
     if (voice) {
         utterance.voice = voice;
-        utterance.lang = voice.lang;
+        utterance.lang = voice.lang || 'es-ES';
     } else {
         utterance.lang = 'es-ES';
     }
-    
-    utterance.rate = options.rate ?? 0.95;
-    utterance.pitch = options.pitch ?? 1.08;
-    utterance.volume = 1;
-    
+
+    const rate = options.rate ?? 1.04;
+    const pitch = options.pitch ?? 1.08;
+    utterance.rate = Math.min(Math.max(rate, 0.8), 1.4);
+    utterance.pitch = Math.min(Math.max(pitch, 0.8), 1.4);
+    utterance.volume = options.volume ?? 1;
+    utterance.onerror = event => {
+        console.warn('No se pudo reproducir la voz de Cosmo.', event?.error || event);
+    };
+
     try { speechSynthesis.speak(utterance); } catch (e) { console.warn('No se pudo reproducir la voz', e); }
 }
 window.hablar = speak; // Exposed for HTML/debug
@@ -621,10 +1381,27 @@ function playMelody(correct) {
 function greeting() {
     const user = currentUser();
     if (!user) return;
+
+    const studentGreetings = [
+        '¡Hola, {name}! Estoy listo para acompañarte en esta misión.',
+        '¡Qué gusto verte, {name}! Hoy vamos a aprender con entusiasmo.',
+        '¡Vamos con toda, {name}! Cada reto te hace más fuerte.',
+        '¡Buenos días, {name}! Tu aventura matemática acaba de comenzar.'
+    ];
+    const staffGreetings = [
+        'Hola, {name}. El panel de seguimiento está listo y funcionando.',
+        '¡Muy bien, {name}! Aquí tienes el estado de tu nave educativa.'
+    ];
+
     if (user.role === 'student') {
-        speak(`Hola, ${user.name}. Tu nave está lista. Elige una misión y sigue aprendiendo. Tómate tu tiempo con tranquilidad.`);
+        const motivation = $('#welcomeBubble')?.textContent || '¡Prepárate para una nueva aventura!';
+        const message = randomItem(studentGreetings).replace('{name}', user.name);
+        const returnMessage = gamificationAnnouncements.get(user.id);
+        const returnGreeting = returnMessage?.startsWith('¡Qué bueno verte de nuevo') ? returnMessage : '';
+        speak(`${message} ${motivation} ${returnGreeting}`, { rate: 1.02, pitch: 1.12 });
     } else {
-        speak(`Hola, ${user.name}. El panel de seguimiento está listo.`);
+        const message = randomItem(staffGreetings).replace('{name}', user.name);
+        speak(message, { rate: 0.98, pitch: 1.08 });
     }
 }
 
@@ -830,8 +1607,8 @@ function statCards(values, interactive = false) {
     const explanations = {
         puntos: 'Ganas 12 por cada respuesta correcta. Muestran tu avance.',
         estrellas: 'Ganas 1 por cada acierto. ¡Colecciónalas!',
-        'racha diaria': 'Entra en días seguidos para mantenerla.',
-        'mejor racha': 'Tu récord de días consecutivos.',
+        'racha de aprendizaje': 'Resuelve actividades en días consecutivos.',
+        'mejor racha': 'Tu récord de días con actividad real.',
         precisión: 'Porcentaje de respuestas correctas en tus prácticas.'
     };
     return values.map((value, index) => {
@@ -896,21 +1673,30 @@ function renderHome() {
     const user = currentUser();
     if (!user) return navigate('auth');
 
+    const daysAway = calendarDaysBetween(user.progress?.gamification?.learningStreak?.lastActivityDate, todayISO());
     applyDailyReset(user); // roll over the streak / daily goal when a new day starts
     applyLogoSettings(user.settings?.logo);
     $('#home').classList.toggle('staff-view', user.role !== 'student');
 
     $('#welcomeTitle').textContent = `¡Hola, ${user.name}!`;
+    const roleLabels = { student: 'Estudiante', teacher: 'Docente', admin: 'Administración' };
+    $('#headerProfileName').textContent = user.name;
+    $('#headerProfileRole').textContent = roleLabels[user.role] || 'Tripulación';
     $('#audioButton').textContent = user.settings?.audio ? '🔊' : '🔇';
     
     $('#studentDashboard').classList.toggle('hidden', user.role !== 'student');
     $('#staffDashboard').classList.toggle('hidden', user.role === 'student');
+    $('#continueLearningButton').classList.toggle('hidden', user.role !== 'student');
     
     if (user.role === 'student') {
         const p = user.progress;
         const hasPremium = Boolean(user.premium);
+        renderGamification(user);
+        renderPersonalizedLearning(user);
         $('#welcomeSubtitle').textContent = 'Tu nave está lista. Elige una misión y sigue aprendiendo.';
-        $('#welcomeBubble').textContent = randomItem(['Tómate tu tiempo con tranquilidad.', 'Aprender no es una carrera.', 'Los errores también son parte del camino.', 'Cada intento fortalece tu mente.']);
+        const motivationOptions = studentMotivations.filter(message => message !== lastStudentMotivation);
+        lastStudentMotivation = randomItem(motivationOptions.length ? motivationOptions : studentMotivations);
+        $('#welcomeBubble').textContent = lastStudentMotivation;
         const nextCalmMessage = randomItem(calmMessages.filter(message => message !== lastCalmMessage));
         $('#calmMessage').textContent = nextCalmMessage;
         lastCalmMessage = nextCalmMessage;
@@ -922,8 +1708,8 @@ function renderHome() {
         $('#premiumHomeAction').textContent = hasPremium ? 'Abrir curso' : 'Conocer';
         
         $('#studentStats').innerHTML = statCards([
-            [p.points, 'puntos'], [p.stars, 'estrellas'], [p.dailyStreak, 'racha diaria'],
-            [p.bestStreak, 'mejor racha'], [p.total ? Math.round(p.correct / p.total * 100) + '%' : '0%', 'precisión']
+            [p.points, 'puntos'], [p.stars, 'estrellas'], [currentLearningStreak(user), 'racha de aprendizaje'],
+            [p.gamification.learningStreak.best, 'mejor racha'], [p.total ? Math.round(p.correct / p.total * 100) + '%' : '0%', 'precisión']
         ], true);
         $$('#studentStats [data-stat-help]').forEach(button => {
             button.onclick = () => {
@@ -936,6 +1722,23 @@ function renderHome() {
         const pathOperations = ['add', 'subtract', 'multiply', 'divide'];
         const completedOperations = pathOperations.filter(operation => p.operations?.[operation]?.completed === true);
         const nextOperation = pathOperations.find(operation => p.operations?.[operation]?.completed !== true);
+        const continueButton = $('#continueLearningButton');
+        const continueStatus = $('#continueLearningStatus');
+        continueButton.disabled = false;
+        continueButton.textContent = 'Continuar aprendiendo';
+        if (!hasPremium) {
+            continueStatus.textContent = 'Abre tus retos gratuitos de Matemáticas.';
+        } else if (nextOperation) {
+            continueStatus.textContent = `Siguiente misión: ${operationInfo[nextOperation].name}.`;
+        } else if (p.assessment.completed) {
+            continueButton.disabled = true;
+            continueButton.textContent = '¡Ruta completada!';
+            continueStatus.textContent = 'Aprobaste las cuatro unidades y la evaluación final. ¡Felicitaciones!';
+        } else {
+            continueStatus.textContent = p.assessment.attempts
+                ? 'La evaluación final está disponible para volver a presentarla.'
+                : 'Las cuatro unidades están aprobadas. La evaluación final está disponible.';
+        }
         const pathProgress = $('#operationPath');
         const progressText = $('#pathProgressText');
         const progressFill = $('#pathProgressFill');
@@ -989,15 +1792,25 @@ function renderHome() {
         }
         renderMathGradeSummary(p);
         
-        $('#miniStats').textContent = `⭐ ${p.stars} · 🔥 ${p.dailyStreak}`;
-        $('#dailyStreakValue').textContent = `${p.dailyStreak} ${p.dailyStreak === 1 ? 'día' : 'días'}`;
+        const activeStreak = currentLearningStreak(user);
+        $('#miniStats').textContent = `⭐ ${p.stars} · 🔥 ${activeStreak}`;
+        $('#dailyStreakValue').textContent = `${activeStreak} ${activeStreak === 1 ? 'día' : 'días'}`;
         $('#dailyText').textContent = toNum(p.todayCorrect) >= 5
             ? `¡Meta diaria cumplida! (${p.todayCorrect} aciertos)`
             : `Hoy conseguiste ${toNum(p.todayCorrect)}/5 aciertos.`;
         $('#dailyProgress').style.width = Math.min((toNum(p.todayCorrect) / 5) * 100, 100) + '%';
         newPuzzle();
         newReal();
+        if (daysAway >= 3) {
+            const returnMessages = [
+                '¡Qué bueno verte de nuevo después de unos días! Cosmo te acompaña cuando quieras retomar.',
+                '¡Cosmo se alegra de tu regreso! Cada nuevo intento es un gran comienzo.',
+                '¡Bienvenido de vuelta, explorador! Tu próxima aventura puede empezar hoy.'
+            ];
+            announceGamification(user, [randomItem(returnMessages)]);
+        }
     } else {
+        $('#continueLearningStatus').textContent = '';
         const admin = user.role === 'admin';
         $('#welcomeSubtitle').textContent = admin ? 'Gestión institucional y aprobación de Premium.' : 'Seguimiento pedagógico y pronósticos.';
         $('#welcomeBubble').textContent = 'Los datos ayudan a acompañar el aprendizaje.';
@@ -1208,7 +2021,7 @@ function renderAchievements() {
     for (const [target, title, icon] of [
         [3, 'Llama encendida', '🔥'], [7, 'Semana espacial', '🗓️'], [14, 'Dos semanas sin parar', '☄️'],
         [30, 'Racha de otro planeta', '🌋'], [60, 'Maestro de la constancia', '🏆']
-    ]) addAchievement(icon, title, `Mantén una racha de ${target} días.`, 'streak', p.bestStreak, target);
+    ]) addAchievement(icon, title, `Mantén una racha de ${target} días con actividad de aprendizaje.`, 'streak', p.gamification.learningStreak.best, target);
 
     for (const [target, title, icon] of [
         [1, 'Misión impecable', '💯'], [5, 'Cinco misiones perfectas', '🌟'],
@@ -1259,13 +2072,28 @@ function renderAchievements() {
     addAchievement('🎨', 'Diseñador de tu galaxia', 'Personaliza los colores, los objetos o el traje de tu logo.', 'creative', customizedLogo ? 1 : 0);
     addAchievement('👑', 'Acceso a la Zona Premium', 'Desbloquea la Zona Premium para explorar sus retos.', 'creative', user.premium ? 1 : 0);
 
+    GAMIFICATION_BADGES.forEach(badge => {
+        const current = Math.min(badge.target, Math.max(0, toNum(badge.value(p))));
+        achievements.push({
+            icon: badge.icon,
+            title: badge.title,
+            description: badge.description,
+            category: badge.category,
+            current,
+            target: badge.target,
+            unlocked: p.gamification.earnedBadges.includes(badge.id),
+            percentage: badge.target ? Math.round(current / badge.target * 100) : 0
+        });
+    });
+
     const unlocked = achievements.filter(achievement => achievement.unlocked).length;
+    const achievementTotal = achievements.length;
     const summary = $('#achievementSummary');
     if (summary) {
         summary.innerHTML = `
-            <div class="achievement-summary-copy"><b>${unlocked} de 50 logros</b><span>${unlocked === 50 ? '¡Colección completa, explorador!' : 'Sigue aprendiendo para desbloquear más insignias.'}</span></div>
-            <div class="achievement-summary-meter" role="progressbar" aria-label="Logros desbloqueados" aria-valuemin="0" aria-valuemax="50" aria-valuenow="${unlocked}">
-                <i style="width:${unlocked / 50 * 100}%"></i>
+            <div class="achievement-summary-copy"><b>${unlocked} de ${achievementTotal} logros</b><span>${unlocked === achievementTotal ? '¡Colección completa, explorador!' : 'Sigue aprendiendo para desbloquear más insignias.'}</span></div>
+            <div class="achievement-summary-meter" role="progressbar" aria-label="Logros desbloqueados" aria-valuemin="0" aria-valuemax="${achievementTotal}" aria-valuenow="${unlocked}">
+                <i style="width:${achievementTotal ? unlocked / achievementTotal * 100 : 0}%"></i>
             </div>`;
     }
 
@@ -1373,6 +2201,9 @@ async function requestMathTutor(payload) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             ...payload,
+            learningContext: quizState?.mode === 'practice' && ['hint', 'review'].includes(payload.phase)
+                ? mathTutorLearningContext(user, payload.operation, quizState?.question?.level)
+                : undefined,
             history: Array.isArray(payload.history) ? payload.history : mathTutorMessages.slice(-8)
         })
     });
@@ -1392,8 +2223,8 @@ async function requestMathTutor(payload) {
     return result.reply.trim();
 }
 
-function baseQuestion(operation = currentOperation, type = randomItem(questionTypes)) {
-    const level = Math.min(3, Math.max(1, toNum($('#levelSelect')?.value, 1)));
+function baseQuestion(operation = currentOperation, type = randomItem(questionTypes), levelOverride) {
+    const level = Math.min(3, Math.max(1, toNum(levelOverride, toNum($('#levelSelect')?.value, 1))));
     const max = level === 1 ? 10 : level === 2 ? 50 : 150;
     let a, b, answer, text;
     
@@ -1433,6 +2264,10 @@ function startQuiz(mode = 'practice') {
     }
     applyDailyReset(user);
     unlockAudio();
+    const selectedLevel = Math.min(3, Math.max(1, toNum($('#levelSelect')?.value, 1)));
+    const practiceLevel = mode === 'practice'
+        ? practiceLevelFor(user, currentOperation, selectedLevel)
+        : selectedLevel;
     const total = mode === 'assessment'
         ? operationKeys.length * 3
         : Math.min(50, Math.max(1, toNum($('#questionCount')?.value, 10)));
@@ -1448,7 +2283,9 @@ function startQuiz(mode = 'practice') {
         total,
         correct: 0,
         started: Date.now(),
+        sessionId: uid(),
         mode,
+        questionLevel: practiceLevel,
         operationPlan,
         questionTypePlan,
         operationTotals: Object.fromEntries(operationKeys.map(operation => [operation, 0])),
@@ -1459,7 +2296,7 @@ function startQuiz(mode = 'practice') {
     $('#quizModeLabel').textContent = mode === 'assessment' ? 'UNIDAD 5 · EVALUACIÓN FINAL' : 'MISIÓN DE APRENDIZAJE';
     $('#quizMissionText').textContent = mode === 'assessment'
         ? '12 retos mezclados: tres preguntas de cada operación. ¡A por tu mejor nota!'
-        : `Aprueba ${operationInfo[currentOperation].name.toLowerCase()} con una nota mínima de ${PASS_GRADE.toFixed(1)}/5.0 para desbloquear la siguiente unidad.`;
+        : `Aprueba ${operationInfo[currentOperation].name.toLowerCase()} con una nota mínima de ${PASS_GRADE.toFixed(1)}/5.0 para desbloquear la siguiente unidad.${practiceLevel !== selectedLevel ? ` Cosmo ajustó esta práctica al nivel ${practiceLevel} según tus respuestas recientes.` : ''}`;
     $('#quizStreak').textContent = '✨ 0';
     navigate('quiz');
     nextQuizQuestion();
@@ -1471,8 +2308,11 @@ function nextQuizQuestion() {
     selectedAnswer = null;
     const q = quizState.question = baseQuestion(
         quizState.operationPlan[quizState.index],
-        quizState.questionTypePlan[quizState.index]
+        quizState.questionTypePlan[quizState.index],
+        quizState.questionLevel
     );
+    q.level = quizState.questionLevel;
+    q.activityId = `${quizState.sessionId}:${quizState.index}:${uid()}`;
     const tutorReply = $('#quizTutorReply');
     if (tutorReply) {
         tutorReply.textContent = '';
@@ -1593,10 +2433,24 @@ function checkAnswer(value) {
     const q = quizState.question;
     const answered = value !== null && value !== undefined && value !== '';
     const correct = answered && Number(value) === Number(q.target);
+    const user = currentUser();
     q.attempted = answered;
     q.studentAnswer = answered
         ? q.type === 'truefalse' ? (Number(value) ? 'Verdadero' : 'Falso') : String(value)
         : 'No respondió';
+    const gamificationMessages = quizState.mode === 'practice'
+        ? recordLearningActivity(user, {
+            activityId: q.activityId,
+            operation: q.operation,
+            correct,
+            source: 'quiz',
+            level: q.level,
+            expression: q.text,
+            studentAnswer: q.studentAnswer,
+            correctAnswer: q.answer
+        })
+        : [];
+    announceGamification(user, gamificationMessages);
     quizState.index++;
     quizState.operationTotals[q.operation]++;
     if (correct) {
@@ -1613,16 +2467,21 @@ function checkAnswer(value) {
     
     if (correct) {
         const praise = randomItem(praiseMessages);
-        screenMessage = `${praise} La respuesta correcta es ${correctLabel}.`;
-        voiceMessage = `${praise} ${currentUser()?.name || 'explorador'}. ${q.type === 'truefalse' ? 'Elegiste correctamente' : mathSpeech(q.text) + ' es igual a ' + q.answer}. Ganaste una estrella.`;
+        const xpLabel = quizState.mode === 'practice' ? ` ${gamificationMessages[0] || ''}` : '';
+        const milestoneLabel = gamificationMessages.slice(1).join(' ');
+        screenMessage = `${praise} La respuesta correcta es ${correctLabel}.${xpLabel ? ` ${xpLabel}` : ''}${milestoneLabel ? ` ${milestoneLabel}` : ''}`;
+        voiceMessage = `${praise} ${user?.name || 'explorador'}. ${q.type === 'truefalse' ? 'Elegiste correctamente' : mathSpeech(q.text) + ' es igual a ' + q.answer}. Ganaste una estrella.${xpLabel}${milestoneLabel ? ` ${milestoneLabel}` : ''}`;
         $('#feedback').className = 'feedback good';
         $('#quizMascot').className = 'mascot celebrating';
         $('#quizBubble').textContent = praise;
         playMelody(true);
     } else {
         const support = nextSupportMessage();
-        screenMessage = answered ? `Tu respuesta fue ${q.type === 'truefalse' ? (value ? 'Verdadero' : 'Falso') : value}. La correcta es ${correctLabel}. ${support}` : `Se terminó el tiempo. La respuesta correcta es ${correctLabel}. ${support}`;
-        voiceMessage = `${support} ${currentUser()?.name || 'explorador'}. La respuesta correcta es ${correctLabel}.`;
+        const explanation = buildLocalMathExplanation(q);
+        screenMessage = answered
+            ? `Tu respuesta fue ${q.studentAnswer}. La correcta es ${correctLabel}. ${support} ${explanation}`
+            : `Se terminó el tiempo. La respuesta correcta es ${correctLabel}. ${support} ${explanation}`;
+        voiceMessage = `${support} ${currentUser()?.name || 'explorador'}. ${explanation}`;
         $('#feedback').className = 'feedback bad';
         $('#quizMascot').className = 'mascot thinking';
         $('#quizBubble').textContent = support;
@@ -1630,7 +2489,7 @@ function checkAnswer(value) {
     }
     
     $('#feedback').textContent = screenMessage;
-    setTimeout(() => speak(voiceMessage, { rate: correct ? 0.94 : 0.87, pitch: correct ? 1.08 : 1.02 }), 700);
+    setTimeout(() => speak(voiceMessage, { rate: correct ? 1 : 0.94, pitch: correct ? 1.24 : 1.18 }), 700);
     $('#answerForm').classList.add('hidden');
     
     $$('.answer-option').forEach(button => {
@@ -1647,6 +2506,8 @@ function checkAnswer(value) {
 function finishQuiz() {
     const user = currentUser();
     if (!user || !quizState || !quizState.total) return navigate('auth');
+    if (quizState.finished) return;
+    quizState.finished = true;
     if (!user.progress?.operations) user.progress = normalizeProgress(user.progress);
 
     const p = user.progress;
@@ -1656,6 +2517,10 @@ function finishQuiz() {
     const percentage = Math.round(quizState.correct / quizState.total * 100);
     const grade = gradeFromPercentage(percentage);
     const passed = grade >= PASS_GRADE;
+    const previousBestGrade = quizState.mode === 'practice'
+        ? toNum(p.operations[currentOperation]?.bestGrade)
+        : 0;
+    const gamificationMessages = [];
     
     if (quizState.mode === 'assessment') {
         p.assessment.attempts++;
@@ -1679,6 +2544,24 @@ function finishQuiz() {
         if (passed) p.operations[currentOperation].completed = true;
         if (percentage === 100) p.perfectMissions = toNum(p.perfectMissions) + 1;
     }
+
+    if (quizState.mode === 'practice') {
+        if (previousBestGrade > 0 && grade > previousBestGrade) {
+            const improvementMessages = [
+                `¡Mejoraste tu nota de ${operationInfo[currentOperation].name}! Cosmo celebra tu progreso.`,
+                `¡Nuevo avance en ${operationInfo[currentOperation].name}! Tu práctica está dando frutos.`
+            ];
+            gamificationMessages.push(randomItem(improvementMessages));
+        }
+        if (operationLearningAnalysis(user, currentOperation).trend === 'improving') {
+            gamificationMessages.push(randomItem([
+                `Tus respuestas recientes muestran progreso en ${operationInfo[currentOperation].name.toLowerCase()}. ¡Sigue así!`,
+                `Cosmo nota que vas mejorando en ${operationInfo[currentOperation].name.toLowerCase()}.`
+            ]));
+        }
+        gamificationMessages.push(...completePracticeSession(user, quizState.sessionId));
+        announceGamification(user, gamificationMessages);
+    }
     
     saveDB();
     
@@ -1693,7 +2576,7 @@ function finishQuiz() {
         ? (passed ? '¡Evaluación aprobada!' : 'Sigue entrenando')
         : (passed ? '¡Unidad aprobada!' : '¡Cada intento te acerca!');
     $('#repeatMission').textContent = quizState.mode === 'assessment' ? 'Repetir evaluación' : 'Repetir misión';
-    $('#summaryMessage').textContent = message;
+    $('#summaryMessage').textContent = [message, ...gamificationMessages].filter(Boolean).join(' ');
     const summaryValues = [
         [`${quizState.correct}/${quizState.total}`, 'aciertos'], [percentage + '%', 'precisión'],
         [grade.toFixed(1) + '/5.0', 'nota']
@@ -1717,7 +2600,7 @@ function finishQuiz() {
             : '';
     }
     navigate('summary');
-    setTimeout(() => speak(message), 300);
+    setTimeout(() => speak([message, ...gamificationMessages].filter(Boolean).join(' ')), 300);
 }
 
 // ==========================================
@@ -1730,15 +2613,23 @@ const routes = {
     divide: ['Reparto equitativo', 'Relación con multiplicación', 'División exacta', 'Distribución real']
 };
 
-function newPuzzle() {
-    const puzzle = randomItem([
-        ['Tres cohetes llevan 4 estrellas cada uno. ¿Cuántas estrellas transportan?', 12, [8, 12, 16, 20]],
-        ['18 cristales se reparten entre 3 astronautas. ¿Cuántos recibe cada uno?', 6, [5, 6, 7, 9]],
-        ['Completa el patrón: 2, 4, 6, 8, ...', 10, [9, 10, 11, 12]]
-    ]);
+function newPuzzle(operation) {
+    const puzzles = [
+        ['Completa el patrón: 2, 4, 6, 8, ...', 10, [9, 10, 11, 12], 'add', '2 + 2 + 2 + 2 + 2'],
+        ['Tenías 14 estrellas y regalaste 5. ¿Cuántas quedan?', 9, [7, 8, 9, 10], 'subtract', '14 − 5'],
+        ['Tres cohetes llevan 4 estrellas cada uno. ¿Cuántas estrellas transportan?', 12, [8, 12, 16, 20], 'multiply', '3 × 4'],
+        ['18 cristales se reparten entre 3 astronautas. ¿Cuántos recibe cada uno?', 6, [5, 6, 7, 9], 'divide', '18 ÷ 3']
+    ];
+    const eligiblePuzzles = operation
+        ? puzzles.filter(puzzle => puzzle[3] === operation)
+        : puzzles;
+    const puzzle = randomItem(eligiblePuzzles);
     $('#puzzleQuestion').textContent = puzzle[0];
+    $('#puzzleFeedback').textContent = '';
+    $('#puzzleFeedback').className = 'feedback';
     $('#puzzleOptions').innerHTML = puzzle[2].map(v => `<button type="button" class="answer-option">${v}</button>`).join('');
 
+    const activityId = uid();
     let answered = false;
     $$('#puzzleOptions .answer-option').forEach(button => {
         button.onclick = () => {
@@ -1753,26 +2644,44 @@ function newPuzzle() {
             if (!correct) button.classList.add('wrong');
 
             playMelody(correct);
-            speak(correct ? '¡Rompecabezas resuelto!' : nextSupportMessage());
-
             const user = currentUser();
+            const gamificationMessages = recordLearningActivity(user, {
+                activityId,
+                operation: puzzle[3],
+                correct,
+                source: 'puzzle',
+                level: 1,
+                expression: puzzle[4] || puzzle[0],
+                studentAnswer: button.textContent,
+                correctAnswer: puzzle[1]
+            });
+            announceGamification(user, gamificationMessages);
             if (correct && user?.progress) {
                 user.progress.puzzles = toNum(user.progress.puzzles) + 1;
                 saveDB();
             }
+            const feedbackMessage = correct
+                ? `¡Rompecabezas resuelto! ${gamificationMessages.join(' ')}`.trim()
+                : `No es la respuesta correcta. ${nextSupportMessage()} ${OPERATION_LEARNING_GUIDES[puzzle[3]].activity} La respuesta correcta era ${puzzle[1]}.`;
+            $('#puzzleFeedback').textContent = feedbackMessage;
+            $('#puzzleFeedback').className = `feedback ${correct ? 'good' : 'bad'}`;
+            speak(feedbackMessage);
         };
     });
 }
 
 function newReal() {
     const problem = randomItem([
-        ['Compras 3 jugos de $2.000. ¿Cuánto pagas?', 6000, [4000, 5000, 6000, 8000]],
-        ['Tienes $10.000 y gastas $3.500. ¿Cuánto queda?', 6500, [5500, 6000, 6500, 7000]],
-        ['12 galletas entre 4 personas. ¿Cuántas recibe cada una?', 3, [2, 3, 4, 6]]
+        ['Compras 3 jugos de $2.000. ¿Cuánto pagas?', 6000, [4000, 5000, 6000, 8000], 'multiply'],
+        ['Tienes $10.000 y gastas $3.500. ¿Cuánto queda?', 6500, [5500, 6000, 6500, 7000], 'subtract'],
+        ['12 galletas entre 4 personas. ¿Cuántas recibe cada una?', 3, [2, 3, 4, 6], 'divide']
     ]);
     $('#realQuestion').textContent = problem[0];
+    $('#realFeedback').textContent = '';
+    $('#realFeedback').className = 'feedback';
     $('#realOptions').innerHTML = problem[2].map(v => `<button type="button" class="answer-option">${v.toLocaleString('es-CO')}</button>`).join('');
 
+    const activityId = uid();
     let answered = false;
     $$('#realOptions .answer-option').forEach((button, index) => {
         button.onclick = () => {
@@ -1787,13 +2696,28 @@ function newReal() {
             if (!correct) button.classList.add('wrong');
 
             playMelody(correct);
-            speak(correct ? '¡Aplicaste las matemáticas a la vida real!' : nextSupportMessage());
-
             const user = currentUser();
+            const gamificationMessages = recordLearningActivity(user, {
+                activityId,
+                operation: problem[3],
+                correct,
+                source: 'real-problem',
+                level: 1,
+                expression: problem[4] || problem[0],
+                studentAnswer: problem[2][index],
+                correctAnswer: problem[1]
+            });
+            announceGamification(user, gamificationMessages);
             if (correct && user?.progress) {
                 user.progress.realProblems = toNum(user.progress.realProblems) + 1;
                 saveDB();
             }
+            const feedbackMessage = correct
+                ? `¡Aplicaste las matemáticas a la vida real! ${gamificationMessages.join(' ')}`.trim()
+                : `No es la respuesta correcta. ${nextSupportMessage()} ${OPERATION_LEARNING_GUIDES[problem[3]].activity} La respuesta correcta era ${problem[1].toLocaleString('es-CO')}.`;
+            $('#realFeedback').textContent = feedbackMessage;
+            $('#realFeedback').className = `feedback ${correct ? 'good' : 'bad'}`;
+            speak(feedbackMessage);
         };
     });
 }
@@ -1936,6 +2860,10 @@ function setupApp() {
 
     // Navigation
     $$('[data-nav]').forEach(b => b.onclick = () => navigate(b.dataset.nav));
+    $('#learningCoachPanel')?.addEventListener('click', event => {
+        const button = event.target.closest('[data-learning-practice]');
+        if (button) beginRecommendedPractice(button.dataset.learningPractice);
+    });
     
     $('#logoutButton').onclick = () => {
         if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch {} }
@@ -1966,6 +2894,41 @@ function setupApp() {
     };
     
     $('#greetingButton').onclick = () => { unlockAudio(); greeting(); };
+
+    $('#continueLearningButton').onclick = () => {
+        const user = currentUser();
+        if (!user || user.role !== 'student') return;
+
+        if (!user.premium) {
+            $('#mathSubjectButton')?.click();
+            requestAnimationFrame(() => $('#freeMathTitle')?.scrollIntoView({
+                behavior: motionReduced() ? 'auto' : 'smooth',
+                block: 'start'
+            }));
+            return;
+        }
+
+        const nextOperation = operationKeys.find(operation => user.progress?.operations?.[operation]?.completed !== true);
+        if (nextOperation) {
+            const missionButton = $(`#operationPath [data-operation="${nextOperation}"]`);
+            if (missionButton && !missionButton.disabled) {
+                missionButton.click();
+                return;
+            }
+            toast('Completa y aprueba la unidad anterior para continuar.');
+            renderHome();
+            return;
+        }
+
+        const allOperationsComplete = operationKeys.every(operation => user.progress?.operations?.[operation]?.completed === true);
+        if (allOperationsComplete && user.progress?.assessment?.completed !== true) {
+            const evaluationButton = $('#evaluationButton');
+            if (evaluationButton && !evaluationButton.disabled) {
+                evaluationButton.click();
+                return;
+            }
+        }
+    };
 
     const videoVolume = $('#videoVolume');
     const videoMuteButton = $('#videoMuteButton');
@@ -2030,7 +2993,7 @@ function setupApp() {
     });
 
     // Quiz Controls
-    $('#practiceButton').onclick = startQuiz;
+    $('#practiceButton').onclick = () => startQuiz('practice');
     $('#evaluationButton').onclick = () => startQuiz('assessment');
     $('#repeatMission').onclick = () => startQuiz(lastQuizMode);
     $('#quitQuiz').onclick = () => { clearInterval(timerId); speechSynthesis.cancel(); navigate('home'); };
@@ -2107,7 +3070,10 @@ function setupApp() {
             replyElement.textContent = reply;
         } catch (error) {
             console.error('No se pudo obtener la ayuda del tutor para el ejercicio.', error);
-            replyElement.textContent = error.message || 'No se pudo conectar con el tutor. Inténtalo de nuevo.';
+            const localSupport = reviewed
+                ? buildLocalMathExplanation(question)
+                : buildLocalMathHint(question);
+            replyElement.textContent = `${error.message || 'No se pudo conectar con el tutor. Inténtalo de nuevo.'} ${localSupport}`;
             replyElement.classList.add('error');
         } finally {
             mathTutorPending = false;
@@ -2162,7 +3128,7 @@ function setupApp() {
         navigate('route');
     });
     
-    $('#newPuzzle').onclick = newPuzzle;
+    $('#newPuzzle').onclick = () => newPuzzle();
     $('#newRealQuestion').onclick = newReal;
     setupGoogleAuth();
     window.addEventListener('google-ready', setupGoogleAuth, { once: true });

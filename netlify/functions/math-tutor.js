@@ -1,5 +1,12 @@
 const allowedOperations = new Set(['add', 'subtract', 'multiply', 'divide']);
 const allowedPhases = new Set(['chat', 'hint', 'review']);
+const allowedEvidence = new Set(['limited', 'exploring', 'reinforce', 'practicing', 'strength']);
+const learningGuidance = {
+    add: 'Ayuda a componer y descomponer cantidades; guía con objetos, dibujos o pasos hacia adelante.',
+    subtract: 'Ayuda a encontrar diferencias y comprobar cuánto queda; guía con objetos o pasos hacia atrás.',
+    multiply: 'Relaciona la multiplicación con grupos iguales y sumas repetidas.',
+    divide: 'Relaciona la división con repartir en grupos iguales y comprobar con una multiplicación.'
+};
 const allowedOrigins = () => [
     process.env.URL,
     process.env.DEPLOY_PRIME_URL,
@@ -59,6 +66,18 @@ function checkRateLimit(key, now = Date.now()) {
     return true;
 }
 
+function isLearningContext(value) {
+    return value === undefined || value === null
+        || typeof value === 'object'
+            && !Array.isArray(value)
+            && Object.keys(value).every(key => ['evidence', 'recentErrors', 'practiceLevel'].includes(key))
+            && (value.evidence === undefined || allowedEvidence.has(value.evidence))
+            && (value.recentErrors === undefined
+                || Number.isInteger(value.recentErrors) && value.recentErrors >= 0 && value.recentErrors <= 5)
+            && (value.practiceLevel === undefined
+                || Number.isInteger(value.practiceLevel) && value.practiceLevel >= 1 && value.practiceLevel <= 3);
+}
+
 exports.handler = async event => {
     if (event.httpMethod !== 'POST') {
         return jsonResponse(405, { error: 'Usa una solicitud POST para hablar con el tutor.' });
@@ -103,6 +122,7 @@ exports.handler = async event => {
         || !isText(payload.studentAnswer, 60, true)
         || !isText(payload.correctAnswer, 60, true)
         || payload.operation && !allowedOperations.has(payload.operation)
+        || !isLearningContext(payload.learningContext)
         || !Array.isArray(payload.history)
         || payload.history.length > 8
         || payload.history.some(message => !message
@@ -120,6 +140,18 @@ exports.handler = async event => {
     const context = [
         payload.operation ? `Operación: ${payload.operation}.` : '',
         payload.question ? `Ejercicio actual: ${payload.question}.` : '',
+        payload.learningContext && payload.operation
+            ? `Orientación pedagógica: ${learningGuidance[payload.operation]}`
+                + (payload.learningContext.evidence && payload.learningContext.evidence !== 'limited'
+                    ? ` La señal local de aprendizaje es "${payload.learningContext.evidence}"; úsala solo para ajustar la explicación, nunca como una calificación.`
+                    : '')
+                + (payload.learningContext.recentErrors > 0
+                    ? ' Prioriza una explicación paciente, concreta y paso a paso.'
+                    : '')
+                + (payload.learningContext.practiceLevel
+                    ? ` La práctica indicada está en el nivel ${payload.learningContext.practiceLevel}; adapta el vocabulario, no inventes datos del estudiante.`
+                    : '')
+            : '',
         payload.phase === 'hint' ? 'El estudiante todavía está resolviendo el ejercicio; ofrece solo una pista.' : '',
         payload.phase === 'review' && payload.studentAnswer ? `Respuesta del estudiante: ${payload.studentAnswer}.` : '',
         payload.phase === 'review' && payload.correctAnswer ? `Respuesta correcta: ${payload.correctAnswer}.` : ''
