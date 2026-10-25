@@ -673,6 +673,11 @@ async function handleGoogleCredential(response) {
 function setupGoogleAuth() {
     const button = $('#googleButton');
     if (!button) return;
+    if (window.TTL_GOOGLE_LOGIN_ENABLED !== true) {
+        button.classList.add('hidden');
+        if (serverAuthEnabled) setServerAuthStatus('El inicio de sesión seguro por Google está temporalmente deshabilitado.');
+        return;
+    }
     if (!serverAuthEnabled) {
         button.classList.add('hidden');
         return;
@@ -774,7 +779,11 @@ async function initializeServerAuth() {
         openServerLearningApp();
         return;
     }
-    setServerAuthStatus('Inicia sesión con Google. El progreso permanecerá bloqueado hasta completar su migración segura al servidor.');
+    if (window.TTL_GOOGLE_LOGIN_ENABLED === true) {
+        setServerAuthStatus('Inicia sesión con Google. El progreso permanecerá bloqueado hasta completar su migración segura al servidor.');
+    } else {
+        setServerAuthStatus('El inicio de sesión seguro está temporalmente deshabilitado. No se abrió una sesión.');
+    }
     setupGoogleAuth();
 }
 
@@ -3659,7 +3668,7 @@ function setupApp() {
                 serverProgressSnapshot = null;
                 serverAttempt = null;
                 if (quizState?.serverSide) quizState = null;
-                setServerAuthStatus('Sesión cerrada. Puedes volver a iniciar sesión con Google.');
+                setServerAuthStatus('Sesión cerrada. El inicio de sesión seguro está temporalmente deshabilitado.');
                 $('#googleButton')?.classList.remove('hidden');
                 $('#serverLogoutButton')?.classList.remove('hidden');
                 navigate('auth');

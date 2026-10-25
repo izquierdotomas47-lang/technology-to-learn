@@ -540,6 +540,13 @@ async function handleGoogleCredential(response) {
 function setupGoogleAuth() {
     const button = $('#googleButton');
     if (!button) return;
+    if (window.TTL_GOOGLE_LOGIN_ENABLED !== true) {
+        button.classList.add('hidden');
+        $('.auth-divider')?.classList.add('hidden');
+        return;
+    }
+    button.classList.remove('hidden');
+    $('.auth-divider')?.classList.remove('hidden');
     if (!GOOGLE_CLIENT_ID) {
         button.innerHTML = '<button type="button" class="google-fallback">Continuar con Google</button>';
         button.querySelector('button').onclick = () => authMessage('El acceso con Google necesita configurar el Client ID de la aplicación.', 'bad');

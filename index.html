@@ -12,8 +12,18 @@
     <link rel="manifest" href="public/manifest.json">
     <link rel="icon" href="public/assets/cosmo.jpg">
     <link rel="stylesheet" href="css/estilos.css?v=80">
-    <script>window.TTL_GOOGLE_CLIENT_ID = '860708338420-qaggph9h0vc3n9m7t1upbthkmiskjtvk.apps.googleusercontent.com';</script>
-    <script src="https://accounts.google.com/gsi/client" async defer onload="window.dispatchEvent(new Event('google-ready'))"></script>
+    <script>
+        window.TTL_GOOGLE_LOGIN_ENABLED = false;
+        window.TTL_GOOGLE_CLIENT_ID = '860708338420-qaggph9h0vc3n9m7t1upbthkmiskjtvk.apps.googleusercontent.com';
+        if (window.TTL_GOOGLE_LOGIN_ENABLED) {
+            const googleIdentityScript = document.createElement('script');
+            googleIdentityScript.src = 'https://accounts.google.com/gsi/client';
+            googleIdentityScript.async = true;
+            googleIdentityScript.defer = true;
+            googleIdentityScript.onload = () => window.dispatchEvent(new Event('google-ready'));
+            document.head.appendChild(googleIdentityScript);
+        }
+    </script>
 </head>
 <body>
     <div class="space-bg">
@@ -82,8 +92,8 @@
                         <input id="loginPassword" type="password" value="123456" minlength="6" required>
                     </label>
                     <button type="submit" class="primary">Entrar a la nave</button>
-                    <div class="auth-divider"><span>o continúa con</span></div>
-                    <div id="googleButton" class="google-button" aria-label="Acceder con Google"></div>
+                    <div class="auth-divider hidden"><span>o continúa con</span></div>
+                    <div id="googleButton" class="google-button hidden" aria-label="Acceder con Google"></div>
                 </form>
 
                 <form id="registerForm" class="form hidden">
@@ -446,7 +456,7 @@
                         <button type="submit" class="primary">Comprobar</button>
                     </form>
 
-                    <aside id="quizTutor" class="math-tutor-quiz">
+                    <aside id="quizTutor" class="math-tutor-quiz hidden">
                         <button id="quizTutorButton" class="secondary" type="button">✨ Pedir una pista a Cosmo IA</button>
                         <p id="quizTutorReply" class="math-tutor-quiz-reply hidden" aria-live="polite"></p>
                     </aside>
@@ -583,7 +593,7 @@
                         </div>
                         <div id="mathGradeList" class="math-grade-list"></div>
                     </section>
-                    <section id="mathTutor" class="math-tutor panel" aria-labelledby="mathTutorTitle">
+                    <section id="mathTutor" class="math-tutor panel hidden" aria-labelledby="mathTutorTitle">
                         <div class="math-tutor-heading">
                             <span class="math-tutor-avatar" aria-hidden="true">✨</span>
                             <div>
