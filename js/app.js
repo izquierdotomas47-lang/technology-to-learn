@@ -1101,13 +1101,9 @@ function beginRecommendedPractice(operation) {
     }
 
     $('#freeMathContent')?.classList.remove('hidden');
-    $('#englishSubjectNotice')?.classList.add('hidden');
     $('#mathSubjectButton')?.setAttribute('aria-expanded', 'true');
     $('#mathSubjectButton')?.setAttribute('aria-pressed', 'true');
-    $('#englishSubjectButton')?.setAttribute('aria-expanded', 'false');
-    $('#englishSubjectButton')?.setAttribute('aria-pressed', 'false');
     $('#mathSubjectButton')?.classList.add('selected');
-    $('#englishSubjectButton')?.classList.remove('selected');
     newPuzzle(operation);
     requestAnimationFrame(() => $('#puzzleQuestion')?.scrollIntoView({
         behavior: motionReduced() ? 'auto' : 'smooth',
@@ -2798,28 +2794,12 @@ function setupApp() {
     });
 
     const mathSubjectButton = $('#mathSubjectButton');
-    const englishSubjectButton = $('#englishSubjectButton');
     const freeMathContent = $('#freeMathContent');
-    const englishSubjectNotice = $('#englishSubjectNotice');
     mathSubjectButton?.addEventListener('click', () => {
         freeMathContent?.classList.remove('hidden');
-        englishSubjectNotice?.classList.add('hidden');
         mathSubjectButton.setAttribute('aria-expanded', 'true');
         mathSubjectButton.setAttribute('aria-pressed', 'true');
-        englishSubjectButton?.setAttribute('aria-expanded', 'false');
-        englishSubjectButton?.setAttribute('aria-pressed', 'false');
         mathSubjectButton.classList.add('selected');
-        englishSubjectButton?.classList.remove('selected');
-    });
-    englishSubjectButton?.addEventListener('click', () => {
-        freeMathContent?.classList.add('hidden');
-        englishSubjectNotice?.classList.remove('hidden');
-        mathSubjectButton?.setAttribute('aria-expanded', 'false');
-        mathSubjectButton?.setAttribute('aria-pressed', 'false');
-        englishSubjectButton.setAttribute('aria-expanded', 'true');
-        englishSubjectButton.setAttribute('aria-pressed', 'true');
-        mathSubjectButton?.classList.remove('selected');
-        englishSubjectButton.classList.add('selected');
     });
 
     // Auth Tabs
