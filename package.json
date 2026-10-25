@@ -1,0 +1,16 @@
+{
+  "name": "technology-to-learn-sas",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:integration": "node tests/learning-postgres.integration.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "google-auth-library": "^10.5.0"
+  }
+}

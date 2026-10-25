@@ -1,9 +1,9 @@
-const CACHE = 'ttl-ultimate-v76';
+const CACHE = 'ttl-ultimate-v81';
 
 const FILES = [
     './',
     './index.html',
-    './css/estilos.css',
+    './css/estilos.css?v=80',
     './js/app.js',
     './manifest.json',
     './assets/cosmo.jpg',

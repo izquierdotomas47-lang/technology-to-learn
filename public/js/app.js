@@ -127,12 +127,18 @@ const navigate = id => {
 // 2. DATABASE (LocalStorage)
 // ==========================================
 const DB_KEY = 'ttl_ultimate_db_v1';
+const authClient = window.TTLAuthClient;
+const localDemoMode = authClient?.isLocalDemoAllowed(location) === true;
 const MATH_TUTOR_API_URL = document.querySelector('meta[name="ttl-math-tutor-api"]')?.content.trim() || '';
 const ADMIN_CODE = 'TTL-DIRECCION-2026';
 const NEQUI_NUMBER = '3104337927';
 const NEQUI_NUMBERS = ['3104337927', '3245957915', '3135595448'];
 const GOOGLE_CLIENT_ID = window.TTL_GOOGLE_CLIENT_ID || '';
-const GOOGLE_TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo?id_token=';
+let serverAuthEnabled = false;
+let serverAuthUser = null;
+let serverProgressSnapshot = null;
+let serverAppUser = null;
+let serverAttempt = null;
 const SUIT_STYLES = {
     classic: 'none', lunar: 'drop-shadow(0 0 20px #bbebff)', mars: 'drop-shadow(0 0 20px #ff543d)',
     alien: 'drop-shadow(0 0 20px #62ff91)', robot: 'grayscale(.4) drop-shadow(0 0 20px #b3c3d8)',
@@ -285,6 +291,7 @@ const blankProgress = () => ({
     dailyStreak: 1, bestStreak: 1, todayCorrect: 0, lastDate: null, 
     perfectMissions: 0, puzzles: 0, realProblems: 0, 
     learningProfile: blankLearningProfile(),
+    freeQuestionHistory: { shown: [], answered: [] },
     operations: {
         add: { total: 0, correct: 0, completed: false, grade: null, bestGrade: 0 }, 
         subtract: { total: 0, correct: 0, completed: false, grade: null, bestGrade: 0 }, 
@@ -317,6 +324,7 @@ const seed = {
 };
 
 function loadDB() {
+    if (!localDemoMode) return;
     try {
         const raw = localStorage.getItem(DB_KEY);
         db = raw ? JSON.parse(raw) : null;
@@ -376,6 +384,7 @@ function loadDB() {
 
 let storageWarned = false;
 function saveDB() {
+    if (!localDemoMode) return;
     try {
         localStorage.setItem(DB_KEY, JSON.stringify(db));
         storageWarned = false;
@@ -389,6 +398,7 @@ function saveDB() {
 }
 
 function currentUser() {
+    if (!localDemoMode) return serverAppUser;
     if (!userId || !db) return null;
     const user = db.users.find(u => u.id === userId);
     if (!user) {
@@ -397,6 +407,55 @@ function currentUser() {
         return null;
     }
     return user;
+}
+
+function applyServerProgress(progressResponse) {
+    if (!progressResponse?.state || !serverAuthUser) throw new Error('El progreso del servidor no es válido.');
+    serverProgressSnapshot = progressResponse;
+    const state = progressResponse.state;
+    const progress = normalizeProgress({
+        ...state,
+        operations: state.operations || {},
+        assessment: state.assessment || {},
+        gamification: { xp: Number(state.xp) || 0 }
+    });
+    progress.stars = Math.max(0, Math.floor(Number(state.stars) || 0));
+    serverAppUser = {
+        ...serverAuthUser,
+        role: serverAuthUser.role,
+        premium: serverAuthUser.premium === true,
+        settings: { audio: true, logo: defaultLogoSettings },
+        progress
+    };
+}
+
+function openServerLearningApp() {
+    if (!serverAppUser) return;
+    setupApp();
+    navigate('home');
+    $('#serverLogoutButton')?.classList.add('hidden');
+}
+
+function lockServerLearningApp(message = 'La sesión ya no está activa. Vuelve a iniciar sesión.') {
+    serverAppUser = null;
+    serverAuthUser = null;
+    serverProgressSnapshot = null;
+    serverAttempt = null;
+    if (quizState?.serverSide) quizState = null;
+    setServerAuthStatus(message);
+    $('#serverLogoutButton')?.classList.remove('hidden');
+    navigate('auth');
+}
+
+async function refreshServerProgress() {
+    try {
+        const fresh = await authClient.getProgress();
+        applyServerProgress(fresh);
+        return fresh;
+    } catch (error) {
+        if (error.status === 401) lockServerLearningApp('La sesión expiró o fue revocada. Inicia sesión otra vez.');
+        throw error;
+    }
 }
 
 function applyLogoSettings(settings = defaultLogoSettings) {
@@ -487,51 +546,139 @@ function startUserSession(user) {
 }
 
 async function handleGoogleCredential(response) {
-    if (!response?.credential) {
-        authMessage('No recibimos la respuesta de Google. Inténtalo de nuevo.', 'bad');
+    const status = $('#serverAuthStatus');
+    if (!serverAuthEnabled || !response?.credential) {
+        if (status) status.textContent = 'El acceso seguro no está disponible en este entorno.';
         return;
     }
 
-    authMessage('Comprobando tu cuenta de Google...');
+    if (status) status.textContent = 'Verificando tu cuenta en el servidor…';
+    $('#googleButton')?.classList.add('hidden');
     try {
-        const result = await fetch(`${GOOGLE_TOKENINFO_URL}${encodeURIComponent(response.credential)}`);
-        if (!result.ok) throw new Error('Token rechazado');
-        const profile = await result.json();
-        const validAudience = profile.aud === GOOGLE_CLIENT_ID;
-        const validIssuer = profile.iss === 'https://accounts.google.com' || profile.iss === 'accounts.google.com';
-        if (!validAudience || !validIssuer || profile.email_verified !== 'true' || !profile.email) {
-            throw new Error('Identidad no verificada');
-        }
-
-        const email = profile.email.trim().toLowerCase();
-        let user = db.users.find(item => item.email === email);
-        if (!user) {
-            user = {
-                id: uid(), name: profile.name?.trim() || 'Explorador', email,
-                password: '', role: 'student', secret: uid(), premium: false,
-                provider: 'google', settings: { audio: true }, progress: blankProgress()
-            };
-            db.users.push(user);
-            saveDB();
-        }
-        startUserSession(user);
+        const result = await authClient.loginWithGoogle(response.credential);
+        serverAuthUser = result.user;
+        $('#serverLogoutButton')?.classList.remove('hidden');
     } catch (error) {
-        console.warn('No se pudo validar el acceso de Google', error);
-        authMessage('No pudimos validar tu cuenta de Google. Revisa tu conexión e inténtalo otra vez.', 'bad');
+        if (status) status.textContent = error.status === 401
+            ? 'Google no pudo verificar la cuenta. Revisa el acceso e inténtalo de nuevo.'
+            : 'No se pudo iniciar sesión en el servidor. No se guardó progreso local; inténtalo más tarde.';
+        $('#googleButton')?.classList.remove('hidden');
+        return;
+    }
+    try {
+        applyServerProgress(await authClient.getProgress());
+        openServerLearningApp();
+    } catch {
+        if (status) status.textContent = 'La sesión se creó en el servidor, pero no se pudo leer el progreso. Cierra la sesión o inténtalo de nuevo; las actividades siguen bloqueadas.';
     }
 }
 
 function setupGoogleAuth() {
     const button = $('#googleButton');
     if (!button) return;
-    if (!GOOGLE_CLIENT_ID) {
-        button.innerHTML = '<button type="button" class="google-fallback">Continuar con Google</button>';
-        button.querySelector('button').onclick = () => authMessage('El acceso con Google necesita configurar el Client ID de la aplicación.', 'bad');
+    if (!serverAuthEnabled) {
+        button.classList.add('hidden');
         return;
     }
-    if (!window.google?.accounts?.id) return;
+    button.classList.remove('hidden');
+    if (!GOOGLE_CLIENT_ID) {
+        button.innerHTML = '';
+        const status = $('#serverAuthStatus');
+        if (status) status.textContent = 'Falta configurar el identificador público de Google en esta página.';
+        return;
+    }
+    if (!window.google?.accounts?.id) {
+        const status = $('#serverAuthStatus');
+        if (status) status.textContent = 'Google Identity Services no está disponible en esta red.';
+        return;
+    }
+    button.innerHTML = '';
     window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
     window.google.accounts.id.renderButton(button, { type: 'standard', theme: 'filled_blue', size: 'large', text: 'continue_with', shape: 'pill', width: 330 });
+}
+
+function setServerAuthStatus(message) {
+    const status = $('#serverAuthStatus');
+    if (status) status.textContent = message;
+}
+
+async function initializeServerAuth() {
+    $$('.tabs, #loginForm, #registerForm, #recoverForm').forEach(element => element.classList.add('hidden'));
+    $('#serverAuthPanel')?.classList.remove('hidden');
+    $('#googleButton')?.classList.add('hidden');
+    $('#serverLogoutButton')?.classList.add('hidden');
+    $('#serverLogoutButton')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        setServerAuthStatus('Cerrando la sesión en el servidor…');
+        try {
+            await authClient.logout();
+            serverAuthUser = null;
+            serverProgressSnapshot = null;
+            serverAppUser = null;
+            serverAttempt = null;
+            if (quizState?.serverSide) quizState = null;
+            button.classList.add('hidden');
+            button.disabled = false;
+            navigate('auth');
+            if (serverAuthEnabled) {
+                setServerAuthStatus('Sesión cerrada. Puedes volver a ingresar con Google.');
+                $('#googleButton')?.classList.remove('hidden');
+                setupGoogleAuth();
+            } else {
+                setServerAuthStatus('Sesión cerrada.');
+            }
+        } catch {
+            button.disabled = false;
+            setServerAuthStatus('No se pudo confirmar el cierre de sesión. Conservamos el estado actual; vuelve a intentarlo.');
+        }
+    });
+
+    if (!authClient) {
+        setServerAuthStatus('No se cargó el cliente de autenticación. El acceso local permanece deshabilitado aquí.');
+        return;
+    }
+    let config;
+    try {
+        config = await authClient.getConfig();
+    } catch {
+        setServerAuthStatus('El servicio de autenticación no responde. El acceso local permanece deshabilitado aquí. Para pruebas locales explícitas, usa ?ttl-demo=1 en localhost.');
+        return;
+    }
+    if (config.enabled !== true) {
+        setServerAuthStatus('La autenticación server-side está deshabilitada o no está configurada. No se leerán ni cambiarán los datos locales. Para pruebas locales explícitas, usa ?ttl-demo=1 en localhost.');
+        return;
+    }
+
+    setServerAuthStatus('Comprobando la sesión segura…');
+    let session;
+    try {
+        session = await authClient.getSession();
+    } catch (error) {
+        if (error.status !== 401) {
+            setServerAuthStatus('No se pudo comprobar la sesión en el servidor. No se abrió una sesión local.');
+            return;
+        }
+        session = { authenticated: false };
+    }
+    serverAuthEnabled = true;
+    window.addEventListener('google-ready', setupGoogleAuth);
+    if (session.authenticated === true) {
+        serverAuthUser = session.user;
+        try {
+            applyServerProgress(await authClient.getProgress());
+        } catch {
+            setServerAuthStatus('La sesión existe, pero no se pudo leer el progreso del servidor. Las actividades siguen bloqueadas.');
+            $('#serverLogoutButton')?.classList.remove('hidden');
+            return;
+        }
+        setServerAuthStatus('Sesión verificada. El progreso y las actividades usarán el servidor.');
+        $('#serverLogoutButton')?.classList.remove('hidden');
+        openServerLearningApp();
+        return;
+    }
+    setServerAuthStatus('Inicia sesión con Google. El progreso permanecerá bloqueado hasta completar su migración segura al servidor.');
+    setupGoogleAuth();
 }
 
 // Guarantee a complete, numeric progress object (self-healing for old/corrupt data)
@@ -621,7 +768,8 @@ function normalizeProgress(progress) {
     const base = blankProgress();
     if (!progress || typeof progress !== 'object') return base;
 
-    const merged = { ...base };
+    // Preserve unknown historical fields (including archived subject data) during migrations.
+    const merged = { ...progress, ...base };
     for (const key of Object.keys(base)) {
         if (key === 'operations' || key === 'lastDate' || key === 'assessment'
             || key === 'gamification' || key === 'learningProfile') continue;
@@ -662,6 +810,15 @@ function normalizeProgress(progress) {
     };
     merged.gamification = normalizeGamification(progress.gamification, merged);
     merged.learningProfile = normalizeLearningProfile(progress.learningProfile, merged);
+    const questionHistory = progress.freeQuestionHistory && typeof progress.freeQuestionHistory === 'object'
+        ? progress.freeQuestionHistory : {};
+    const normalizeQuestionIds = values => Array.isArray(values)
+        ? [...new Set(values.filter(value => typeof value === 'string' && value.length <= 180))]
+        : [];
+    merged.freeQuestionHistory = {
+        shown: normalizeQuestionIds(questionHistory.shown),
+        answered: normalizeQuestionIds(questionHistory.answered)
+    };
     return merged;
 }
 
@@ -778,6 +935,13 @@ function recordLearningDay(user) {
 function currentLearningStreak(user) {
     const streak = user.progress.gamification.learningStreak;
     return [todayISO(), todayISO(-1)].includes(streak.lastActivityDate) ? streak.current : 0;
+}
+
+function updateMiniStats(user, activeStreak = currentLearningStreak(user)) {
+    const miniStats = $('#miniStats');
+    if (!miniStats || user?.role !== 'student' || !user.progress?.gamification) return;
+    const currentLevel = levelProgress(user.progress.gamification.xp).level;
+    miniStats.textContent = `Nivel ${currentLevel} · ⭐ ${toNum(user.progress.stars)} · 🔥 ${activeStreak}`;
 }
 
 function operationLearningAnalysis(user, operation) {
@@ -934,13 +1098,9 @@ function beginRecommendedPractice(operation) {
         }
     }
     $('#freeMathContent')?.classList.remove('hidden');
-    $('#englishSubjectNotice')?.classList.add('hidden');
     $('#mathSubjectButton')?.setAttribute('aria-expanded', 'true');
     $('#mathSubjectButton')?.setAttribute('aria-pressed', 'true');
-    $('#englishSubjectButton')?.setAttribute('aria-expanded', 'false');
-    $('#englishSubjectButton')?.setAttribute('aria-pressed', 'false');
     $('#mathSubjectButton')?.classList.add('selected');
-    $('#englishSubjectButton')?.classList.remove('selected');
     newPuzzle(operation);
     requestAnimationFrame(() => $('#puzzleQuestion')?.scrollIntoView({
         behavior: motionReduced() ? 'auto' : 'smooth',
@@ -1016,6 +1176,7 @@ function recordLearningActivity(user, {
 
     messages.push(...checkDailyMissionRewards(user));
     messages.push(...checkBadgeUnlocks(user));
+    updateMiniStats(user);
     saveDB();
     return messages;
 }
@@ -1569,6 +1730,7 @@ function renderHome() {
     
     $('#studentDashboard').classList.toggle('hidden', user.role !== 'student');
     $('#staffDashboard').classList.toggle('hidden', user.role === 'student');
+    $('#continueLearningButton').classList.toggle('hidden', user.role !== 'student');
     
     if (user.role === 'student') {
         const p = user.progress;
@@ -1604,6 +1766,23 @@ function renderHome() {
         const pathOperations = ['add', 'subtract', 'multiply', 'divide'];
         const completedOperations = pathOperations.filter(operation => p.operations?.[operation]?.completed === true);
         const nextOperation = pathOperations.find(operation => p.operations?.[operation]?.completed !== true);
+        const continueButton = $('#continueLearningButton');
+        const continueStatus = $('#continueLearningStatus');
+        continueButton.disabled = false;
+        continueButton.textContent = 'Continuar aprendiendo';
+        if (!hasPremium) {
+            continueStatus.textContent = 'Abre tus retos gratuitos de Matemáticas.';
+        } else if (nextOperation) {
+            continueStatus.textContent = `Siguiente misión: ${operationInfo[nextOperation].name}.`;
+        } else if (p.assessment.completed) {
+            continueButton.disabled = true;
+            continueButton.textContent = '¡Ruta completada!';
+            continueStatus.textContent = 'Aprobaste las cuatro unidades y la evaluación final. ¡Felicitaciones!';
+        } else {
+            continueStatus.textContent = p.assessment.attempts
+                ? 'La evaluación final está disponible para volver a presentarla.'
+                : 'Las cuatro unidades están aprobadas. La evaluación final está disponible.';
+        }
         const pathProgress = $('#operationPath');
         const progressText = $('#pathProgressText');
         const progressFill = $('#pathProgressFill');
@@ -1658,7 +1837,7 @@ function renderHome() {
         renderMathGradeSummary(p);
         
         const activeStreak = currentLearningStreak(user);
-        $('#miniStats').textContent = `⭐ ${p.stars} · 🔥 ${activeStreak}`;
+        updateMiniStats(user, activeStreak);
         $('#dailyStreakValue').textContent = `${activeStreak} ${activeStreak === 1 ? 'día' : 'días'}`;
         $('#dailyText').textContent = toNum(p.todayCorrect) >= 5
             ? `¡Meta diaria cumplida! (${p.todayCorrect} aciertos)`
@@ -2136,7 +2315,82 @@ function baseQuestion(operation = currentOperation, type = randomItem(questionTy
     return { operation, a, b, answer, text, object: operationInfo[operation].object, type };
 }
 
+async function runSafeServerRetry(requestFactory) {
+    try {
+        return await requestFactory();
+    } catch (error) {
+        if (error.status === 401 || (error.status >= 400 && error.status < 500)) throw error;
+        return requestFactory();
+    }
+}
+
+async function startServerQuiz(mode) {
+    const user = serverAppUser;
+    if (!user || !authClient) return lockServerLearningApp();
+    if (!user.premium) {
+        toast('El curso completo de Matemáticas requiere acceso Premium.');
+        navigate('premium');
+        return;
+    }
+    const selectedLevel = Math.min(3, Math.max(1, toNum($('#levelSelect')?.value, 1)));
+    const level = mode === 'practice' ? practiceLevelFor(user, currentOperation, selectedLevel) : selectedLevel;
+    const total = mode === 'assessment' ? 12 : Math.min(50, Math.max(1, toNum($('#questionCount')?.value, 10)));
+    const idempotencyKey = uid();
+    const payload = { mode, operation: currentOperation, level, total, idempotencyKey };
+    let attempt;
+    try {
+        attempt = await runSafeServerRetry(() => authClient.startAttempt(payload));
+    } catch (error) {
+        if (error.status === 401) return lockServerLearningApp('La sesión expiró o fue revocada. Inicia sesión otra vez.');
+        toast(error.status === 403
+            ? (error.message || 'El servidor aún no autoriza esta actividad.')
+            : 'No se pudo iniciar la actividad en el servidor. No se guardó progreso local.');
+        return;
+    }
+    if (attempt.exhausted || !Array.isArray(attempt.questions) || !attempt.questions.length) {
+        toast('No hay preguntas disponibles para esta actividad.');
+        return;
+    }
+    serverAttempt = { id: attempt.attemptId, mode };
+    quizState = {
+        serverSide: true,
+        attemptId: attempt.attemptId,
+        questions: attempt.questions,
+        index: 0,
+        total: attempt.total,
+        correct: 0,
+        started: Date.now(),
+        sessionId: attempt.attemptId,
+        mode,
+        questionLevel: level,
+        operationPlan: attempt.questions.map(question => question.operation),
+        questionTypePlan: attempt.questions.map(question => question.type),
+        operationTotals: Object.fromEntries(operationKeys.map(operation => [operation, 0])),
+        operationCorrect: Object.fromEntries(operationKeys.map(operation => [operation, 0])),
+        sessionProgressStart: {
+            xp: Number(serverProgressSnapshot?.state?.xp) || 0,
+            stars: Number(serverProgressSnapshot?.state?.stars) || 0
+        },
+        streak: 0,
+        finished: false,
+        finishPending: false
+    };
+    lastQuizMode = mode;
+    $('#quizModeLabel').textContent = mode === 'assessment' ? 'UNIDAD 5 · EVALUACIÓN FINAL' : 'MISIÓN DE APRENDIZAJE';
+    $('#quizMissionText').textContent = mode === 'assessment'
+        ? '12 retos mezclados: tres preguntas de cada operación. ¡A por tu mejor nota!'
+        : `Aprueba ${operationInfo[currentOperation].name.toLowerCase()} con una nota mínima de ${PASS_GRADE.toFixed(1)}/5.0 para desbloquear la siguiente misión.`;
+    $('#quizStreak').textContent = '✨ 0';
+    navigate('quiz');
+    nextQuizQuestion();
+}
+
 function startQuiz(mode = 'practice') {
+    if (!localDemoMode) {
+        if (serverAppUser) return startServerQuiz(mode);
+        toast('Inicia sesión para abrir una actividad segura.');
+        return;
+    }
     const user = currentUser();
     if (!user || user.role !== 'student' || !user.progress?.operations) {
         toast('Las misiones están disponibles para estudiantes.');
@@ -2185,6 +2439,11 @@ function startQuiz(mode = 'practice') {
         started: Date.now(),
         sessionId: uid(),
         mode,
+        sessionProgressStart: {
+            xp: toNum(user.progress.gamification?.xp),
+            missionsCompleted: toNum(user.progress.gamification?.lifetime?.missionsCompleted),
+            earnedBadges: [...(user.progress.gamification?.earnedBadges || [])]
+        },
         questionLevel: practiceLevel,
         operationPlan,
         questionTypePlan,
@@ -2202,7 +2461,84 @@ function startQuiz(mode = 'practice') {
     nextQuizQuestion();
 }
 
+function renderServerQuestion() {
+    const q = quizState.question = quizState.questions[quizState.index];
+    if (!q || typeof q.id !== 'string' || !Array.isArray(q.options) || !q.options.length) {
+        toast('El servidor devolvió una pregunta no válida. La actividad quedó bloqueada.');
+        return;
+    }
+    clearInterval(timerId);
+    timerId = null;
+    selectedAnswer = null;
+    const tutorReply = $('#quizTutorReply');
+    if (tutorReply) { tutorReply.textContent = ''; tutorReply.classList.add('hidden'); }
+    const tutorButton = $('#quizTutorButton');
+    if (tutorButton) { tutorButton.disabled = false; tutorButton.textContent = '✨ Pedir una pista a Cosmo IA'; }
+    $('#questionNumber').textContent = `Pregunta ${quizState.index + 1} de ${quizState.total}`;
+    $('#quizProgress').style.width = `${quizState.index / quizState.total * 100}%`;
+    $('#questionType').textContent = {
+        choice: '🎯 Elige una respuesta', visual: '🔭 Reto visual', story: '🪐 Historia interactiva',
+        truefalse: '⚡ Detecta la señal', input: '🧭 Escribe el resultado'
+    }[q.type] || 'Reto de Matemáticas';
+    const scenes = [
+        ['🚀', 'Despegue relámpago'], ['🛸', 'Rescate en órbita'], ['🌌', 'Portal galáctico'],
+        ['🛰️', 'Código de la estación'], ['🌠', 'Caza de estrellas'], ['🪐', 'Planeta misterioso']
+    ];
+    const [icon, scene] = randomItem(scenes);
+    $('#challengeScene').textContent = `${icon} ${scene} · ${operationInfo[q.operation]?.name || 'Matemáticas'}`;
+    $('#quizOperationBadge').textContent = operationInfo[q.operation]?.name || '';
+    $('#quizOperationBadge').classList.toggle('hidden', quizState.mode !== 'assessment');
+    const storyPrompts = {
+        add: `El radar localizó ${q.a} ${q.object}. Llegan ${q.b} más a la estación. ¿Cuántos hay ahora?`,
+        subtract: `La nave transporta ${q.a} ${q.object} y entrega ${q.b}. ¿Cuántos quedan a bordo?`,
+        multiply: `Se preparan ${q.a} cápsulas con ${q.b} ${q.object} en cada una. ¿Cuántos se necesitan?`,
+        divide: `Hay ${q.a} ${q.object} para repartir en ${q.b} equipos. ¿Cuántos recibe cada equipo?`
+    };
+    $('#questionStory').textContent = q.type === 'truefalse'
+        ? q.prompt
+        : q.type === 'story' ? storyPrompts[q.operation] : ({
+            choice: '¡La consola está parpadeando! Elige el resultado correcto para seguir avanzando.',
+            visual: 'Mira con atención los objetos que llegaron. ¿Cuántos hay al completar la operación?',
+            input: 'Elige una respuesta para cargar el propulsor de la nave.'
+        }[q.type] || q.prompt);
+    $('#visualQuestion').textContent = q.type === 'visual'
+        ? q.object.repeat(Math.min(q.a, 18)) + (q.operation === 'add' ? ` + ${q.object.repeat(Math.min(q.b, 18))}`
+            : q.operation === 'subtract' ? ` − ${q.b}` : q.operation === 'multiply' ? ` × ${q.b}` : ` ÷ ${q.b}`)
+        : '';
+    $('#equation').textContent = ['story', 'truefalse'].includes(q.type) ? '' : `${q.text} = ?`;
+    const icons = ['🪐', '🚀', '🌟', '🛸'];
+    $('#answerOptions').innerHTML = q.options.map((value, index) => {
+        const label = q.type === 'truefalse'
+            ? (Number(value) ? '¡Sí, es verdad!' : 'No, es una trampa')
+            : Number(value).toLocaleString('es-CO');
+        return `<button type="button" class="answer-option${q.type === 'truefalse' ? ` answer-${Number(value) ? 'true' : 'false'}` : ''}" data-value="${escapeHTML(value)}" data-option-index="${index}" data-choice="${index + 1}">
+            <span class="answer-icon" aria-hidden="true">${q.type === 'truefalse' ? (Number(value) ? '✅' : '⚠️') : icons[index % icons.length]}</span>
+            <span class="answer-label">${escapeHTML(label)}</span><span class="answer-key" aria-hidden="true">${index + 1}</span>
+        </button>`;
+    }).join('');
+    $$('.answer-option').forEach(button => {
+        button.onclick = () => {
+            if (q.pendingOption !== undefined) return;
+            $$('.answer-option').forEach(item => item.classList.remove('selected'));
+            button.classList.add('selected');
+            selectedAnswer = Number(button.dataset.optionIndex);
+            if (q.type === 'truefalse') checkAnswer(selectedAnswer);
+        };
+    });
+    $('#answerForm').classList.toggle('hidden', q.type === 'truefalse');
+    $('#writtenAnswer').value = '';
+    $('#writtenAnswer').placeholder = 'Selecciona una de las opciones';
+    $('#feedback').textContent = '';
+    $('#feedback').className = 'feedback';
+    $('#nextQuestion').classList.add('hidden');
+    $('#quizBubble').textContent = randomItem(['Tómate tu tiempo.', 'Respira y observa.', 'Piensa paso a paso.', 'Vamos, se puede lograr.']);
+    $('#quizMascot').className = 'mascot bouncing';
+    $('#timerBox').classList.add('hidden');
+    $('#quizTutor')?.classList.add('hidden');
+}
+
 function nextQuizQuestion() {
+    if (quizState?.serverSide) return renderServerQuestion();
     clearInterval(timerId);
     timerId = null;
     selectedAnswer = null;
@@ -2322,8 +2658,119 @@ function nextQuizQuestion() {
 
 function mathSpeech(text) { return text.replace(/\+/g, ' más ').replace(/−|-/g, ' menos ').replace(/×|\*/g, ' por ').replace(/÷|\//g, ' dividido entre '); }
 
+async function submitServerQuizAnswer(selectedOption) {
+    const q = quizState?.question;
+    if (!quizState?.serverSide || !q || q.serverAnswered || q.answerPending) return;
+    if (!Number.isInteger(selectedOption) || selectedOption < 0 || selectedOption >= q.options.length) {
+        $('#feedback').textContent = 'Selecciona una de las opciones para responder.';
+        $('#feedback').className = 'feedback bad';
+        return;
+    }
+    if (q.pendingOption !== undefined && q.pendingOption !== selectedOption) {
+        $('#feedback').textContent = 'La respuesta está pendiente de confirmación. Reintenta esa misma opción.';
+        $('#feedback').className = 'feedback bad';
+        return;
+    }
+    q.pendingOption = selectedOption;
+    q.answerPending = true;
+    $$('.answer-option').forEach(button => { button.disabled = true; });
+    const submitButton = $('#answerForm button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+    $('#feedback').textContent = 'Enviando la respuesta al servidor…';
+    $('#feedback').className = 'feedback';
+    $('#nextQuestion').classList.add('hidden');
+    let result;
+    try {
+        const answerPayload = {
+            attemptId: quizState.attemptId,
+            questionId: q.id,
+            selectedOption
+        };
+        result = await runSafeServerRetry(() => authClient.answerAttemptOnce(answerPayload));
+    } catch (error) {
+        q.answerPending = false;
+        if (submitButton) submitButton.disabled = false;
+        if (error.status === 401) return lockServerLearningApp('La sesión expiró o fue revocada. Inicia sesión otra vez.');
+        if (error.status === 409 || error.status === 404) {
+            quizState.serverConflict = true;
+            $('#feedback').textContent = error.message || 'La pregunta ya no está disponible en este intento.';
+            $('#feedback').className = 'feedback bad';
+            $('#answerForm').classList.add('hidden');
+            $('#nextQuestion').textContent = 'Volver al mapa';
+            $('#nextQuestion').classList.remove('hidden');
+            return;
+        }
+        q.answerError = true;
+        $('#feedback').textContent = 'No pudimos confirmar la respuesta. Reintenta la misma opción; el servidor evita duplicarla.';
+        $('#feedback').className = 'feedback bad';
+        $('#nextQuestion').textContent = 'Reintentar respuesta';
+        $('#nextQuestion').classList.remove('hidden');
+        return;
+    }
+    q.answerPending = false;
+    q.answerError = false;
+    q.serverAnswered = true;
+    q.attempted = true;
+    q.answer = Number(result.correctAnswer);
+    q.target = q.type === 'truefalse'
+        ? Number(q.claim === q.answer)
+        : Number(result.correctAnswer);
+    const correctOptionIndex = q.type === 'truefalse'
+        ? q.target
+        : q.options.findIndex(option => Number(option) === Number(result.correctAnswer));
+    const correct = result.correct === true;
+    const chosenValue = q.options[selectedOption];
+    q.studentAnswer = q.type === 'truefalse'
+        ? (Number(chosenValue) ? 'Verdadero' : 'Falso')
+        : String(chosenValue);
+    quizState.index++;
+    quizState.operationTotals[q.operation]++;
+    if (correct) {
+        quizState.correct++;
+        quizState.operationCorrect[q.operation]++;
+        quizState.streak++;
+    } else {
+        quizState.streak = 0;
+    }
+    $('#quizStreak').textContent = `✨ ${quizState.streak}`;
+
+    let confirmedXP = null;
+    try {
+        await refreshServerProgress();
+        confirmedXP = Number(serverProgressSnapshot.state.xp) || 0;
+        updateMiniStats(serverAppUser);
+    } catch (error) {
+        if (error.status === 401) return;
+    }
+    const correctLabel = q.type === 'truefalse'
+        ? (q.target ? 'Verdadero' : 'Falso')
+        : Number(result.correctAnswer).toLocaleString('es-CO');
+    const explanation = buildLocalMathExplanation(q);
+    const feedback = correct
+        ? `¡Respuesta correcta! ${explanation}${confirmedXP === null ? ' No se pudo actualizar el total de XP.' : ` El servidor confirma ${confirmedXP} XP acumulados.`}`
+        : `Tu respuesta fue ${q.studentAnswer}. La correcta es ${correctLabel}. ${explanation}`;
+    $('#feedback').textContent = feedback;
+    $('#feedback').className = `feedback ${correct ? 'good' : 'bad'}`;
+    $('#quizBubble').textContent = correct ? '¡Buen trabajo!' : 'Revisa el procedimiento paso a paso.';
+    $('#quizMascot').className = correct ? 'mascot celebrating' : 'mascot thinking';
+    playMelody(correct);
+    const shownCorrectOption = q.type === 'truefalse'
+        ? q.options.findIndex(value => Number(value) === q.target)
+        : correctOptionIndex;
+    $$('.answer-option').forEach((button, index) => {
+        button.disabled = true;
+        if (index === shownCorrectOption) button.classList.add('correct');
+        if (index === selectedOption && !correct) button.classList.add('wrong');
+    });
+    $('#answerForm').classList.add('hidden');
+    $('#nextQuestion').textContent = quizState.index >= quizState.total ? 'Ver resultados →' : 'Siguiente aventura →';
+    $('#nextQuestion').classList.remove('hidden');
+    if (correct) setTimeout(() => speak(feedback), 300);
+}
+
 function checkAnswer(value) {
     if (!quizState || !quizState.question) return;
+    if (quizState.serverSide) return submitServerQuizAnswer(value);
     const nextButton = $('#nextQuestion');
     if (nextButton && !nextButton.classList.contains('hidden')) return;
     clearInterval(timerId);
@@ -2403,7 +2850,93 @@ function checkAnswer(value) {
     $('#nextQuestion').textContent = quizState.index >= quizState.total ? 'Ver resultados →' : 'Siguiente aventura →';
 }
 
+async function finishServerQuiz() {
+    if (!quizState?.serverSide || quizState.finishPending || quizState.finished) return;
+    quizState.finishPending = true;
+    const button = $('#nextQuestion');
+    button.disabled = true;
+    button.textContent = 'Guardando resultados…';
+    let result;
+    try {
+        result = await runSafeServerRetry(() => authClient.finishAttempt(quizState.attemptId));
+    } catch (error) {
+        quizState.finishPending = false;
+        button.disabled = false;
+        if (error.status === 401) return lockServerLearningApp('La sesión expiró o fue revocada. Inicia sesión otra vez.');
+        $('#feedback').textContent = error.status === 409
+            ? (error.message || 'El servidor aún no confirma que todas las preguntas estén respondidas.')
+            : 'No se pudo confirmar el resultado. Reintenta guardar; el servidor evita duplicar la finalización.';
+        $('#feedback').className = 'feedback bad';
+        button.textContent = 'Reintentar guardar resultado';
+        return;
+    }
+    quizState.finishPending = false;
+    quizState.finished = true;
+    quizState.correct = Number(result.score) || 0;
+    quizState.percentage = Number(result.percentage) || 0;
+    quizState.grade = Number(result.grade) || 1;
+    quizState.passed = result.passed === true;
+    let progressConfirmed = false;
+    try {
+        await refreshServerProgress();
+        progressConfirmed = true;
+        updateMiniStats(serverAppUser);
+    } catch (error) {
+        if (error.status === 401) return;
+    }
+    const xpTotal = progressConfirmed ? Number(serverProgressSnapshot.state.xp) || 0 : null;
+    const starsTotal = progressConfirmed ? Number(serverProgressSnapshot.state.stars) || 0 : null;
+    const elapsed = Math.max(0, Math.round((Date.now() - quizState.started) / 1000));
+    const gradeLabel = `${quizState.grade.toFixed(1)}/5.0`;
+    const passedMessage = quizState.mode === 'assessment'
+        ? (quizState.passed
+            ? `¡Evaluación aprobada, ${serverAppUser.name}! Lograste ${quizState.percentage}% y una nota de ${gradeLabel}.`
+            : `Obtuviste ${quizState.percentage}% y una nota de ${gradeLabel}. Necesitas ${PASS_GRADE.toFixed(1)}/5.0 para aprobar.`)
+        : (quizState.passed
+            ? `¡Unidad aprobada, ${serverAppUser.name}! Lograste ${quizState.percentage}% y una nota de ${gradeLabel}.`
+            : `Lograste ${quizState.percentage}% y una nota de ${gradeLabel}. Necesitas ${PASS_GRADE.toFixed(1)}/5.0 para aprobar.`);
+    $('#summaryTitle').textContent = quizState.mode === 'assessment'
+        ? (quizState.passed ? '¡Evaluación aprobada!' : 'Sigue entrenando')
+        : (quizState.passed ? '¡Unidad aprobada!' : '¡Cada intento te acerca!');
+    $('#repeatMission').textContent = quizState.mode === 'assessment' ? 'Repetir evaluación' : 'Repetir misión';
+    $('#summaryMessage').textContent = progressConfirmed
+        ? passedMessage : `${passedMessage} El resultado quedó guardado; no se pudo actualizar el progreso visible.`;
+    const summaryStats = [
+        [`${quizState.correct}/${quizState.total}`, 'aciertos'],
+        [`${quizState.percentage}%`, 'precisión'], [gradeLabel, 'nota']
+    ];
+    if (quizState.mode === 'assessment') summaryStats.push(['4', 'operaciones'], [`${Math.round(elapsed / 60)} min`, 'tiempo']);
+    else {
+        if (xpTotal !== null) summaryStats.push([`${xpTotal}`, 'XP acumulados']);
+        if (starsTotal !== null) summaryStats.push([`${starsTotal}`, 'estrellas totales']);
+        summaryStats.push([`${Math.round(elapsed / 60)} min`, 'tiempo']);
+    }
+    $('#summaryStats').innerHTML = statCards(summaryStats);
+    const sessionRewards = $('#sessionRewards');
+    const sessionRewardsContent = $('#sessionRewardsContent');
+    const showRewards = quizState.mode === 'practice' && progressConfirmed;
+    const sessionRewardsTitle = $('#sessionRewardsTitle');
+    if (sessionRewardsTitle) sessionRewardsTitle.textContent = 'Progreso guardado';
+    sessionRewards?.classList.toggle('hidden', !showRewards);
+    if (sessionRewardsContent) sessionRewardsContent.innerHTML = showRewards
+        ? `<div class="session-reward-grid"><p><b>${xpTotal} XP</b><span>total confirmado por el servidor</span></p><p><b>${starsTotal} ⭐</b><span>total confirmado por el servidor</span></p></div>`
+        : '';
+    const breakdown = $('#assessmentBreakdown');
+    if (breakdown) {
+        breakdown.classList.toggle('hidden', quizState.mode !== 'assessment');
+        breakdown.innerHTML = quizState.mode === 'assessment'
+            ? `<h3>Resultados por operación</h3><div class="assessment-breakdown-grid">${operationKeys.map(operation => {
+                const total = quizState.operationTotals[operation];
+                const correct = quizState.operationCorrect[operation];
+                return `<article><span>${escapeHTML(operationInfo[operation].name)}</span><b>${correct}/${total}</b><small>Respuestas calificadas por el servidor</small></article>`;
+            }).join('')}</div>` : '';
+    }
+    serverAttempt = null;
+    navigate('summary');
+}
+
 function finishQuiz() {
+    if (quizState?.serverSide) return finishServerQuiz();
     const user = currentUser();
     if (!user || !quizState || !quizState.total) return navigate('auth');
     if (quizState.finished) return;
@@ -2464,6 +2997,7 @@ function finishQuiz() {
     }
     
     saveDB();
+    updateMiniStats(user);
     
     const message = quizState.mode === 'assessment'
         ? passed
@@ -2484,9 +3018,26 @@ function finishQuiz() {
     if (quizState.mode === 'assessment') {
         summaryValues.push(['4', 'operaciones'], [Math.round(elapsed / 60) + ' min', 'tiempo']);
     } else {
-        summaryValues.push(['+' + quizState.correct * 12, 'puntos'], ['+' + quizState.correct, 'estrellas'], [Math.round(elapsed / 60) + ' min', 'tiempo']);
+        const xpEarned = Math.max(0, toNum(p.gamification?.xp) - toNum(quizState.sessionProgressStart?.xp));
+        summaryValues.push(['+' + xpEarned, 'XP'], ['+' + quizState.correct * 12, 'puntos'], ['+' + quizState.correct, 'estrellas'], [Math.round(elapsed / 60) + ' min', 'tiempo']);
     }
     $('#summaryStats').innerHTML = statCards(summaryValues);
+    const sessionRewards = $('#sessionRewards');
+    const sessionRewardsContent = $('#sessionRewardsContent');
+    if (sessionRewards && sessionRewardsContent) {
+        const start = quizState.sessionProgressStart || {};
+        const xpEarned = Math.max(0, toNum(p.gamification?.xp) - toNum(start.xp));
+        const missionsEarned = Math.max(0, toNum(p.gamification?.lifetime?.missionsCompleted) - toNum(start.missionsCompleted));
+        const newBadges = (p.gamification?.earnedBadges || [])
+            .filter(id => !(start.earnedBadges || []).includes(id))
+            .map(id => GAMIFICATION_BADGES.find(badge => badge.id === id))
+            .filter(Boolean);
+        const hasRewards = quizState.mode === 'practice' && (xpEarned || missionsEarned || newBadges.length);
+        sessionRewards.classList.toggle('hidden', !hasRewards);
+        sessionRewardsContent.innerHTML = hasRewards
+            ? `<div class="session-reward-grid"><p><b>+${xpEarned} XP</b><span>avance real de esta sesión</span></p><p><b>${missionsEarned}</b><span>${missionsEarned === 1 ? 'misión completada' : 'misiones completadas'}</span></p>${newBadges.length ? `<p class="session-badges"><b>${newBadges.map(badge => `${badge.icon} ${escapeHTML(badge.title)}`).join(' · ')}</b><span>${newBadges.length === 1 ? 'nueva insignia' : 'nuevas insignias'}</span></p>` : ''}</div>`
+            : '';
+    }
     const breakdown = $('#assessmentBreakdown');
     if (breakdown) {
         breakdown.classList.toggle('hidden', quizState.mode !== 'assessment');
@@ -2513,45 +3064,288 @@ const routes = {
     divide: ['Reparto equitativo', 'Relación con multiplicación', 'División exacta', 'Distribución real']
 };
 
+const FREE_PUZZLES = [
+    ['Completa el patrón: 2, 4, 6, 8, ...', 10, [9, 10, 11, 12], 'add', '2 + 2 + 2 + 2 + 2', 'puzzle-pattern-2s-v1'],
+    ['Tenías 14 estrellas y regalaste 5. ¿Cuántas quedan?', 9, [7, 8, 9, 10], 'subtract', '14 − 5', 'puzzle-stars-gift-v1'],
+    ['Tres cohetes llevan 4 estrellas cada uno. ¿Cuántas estrellas transportan?', 12, [8, 12, 16, 20], 'multiply', '3 × 4', 'puzzle-rockets-groups-v1'],
+    ['18 cristales se reparten entre 3 astronautas. ¿Cuántos recibe cada uno?', 6, [5, 6, 7, 9], 'divide', '18 ÷ 3', 'puzzle-crystals-share-v1'],
+    ['¿Qué número sigue? 3, 6, 9, 12, ...', 15, [13, 14, 15, 18], 'add', '12 + 3', 'puzzle-pattern-3s-v1'],
+    ['Completa la secuencia: 5, 10, 15, ...', 20, [18, 20, 25, 30], 'add', '15 + 5', 'puzzle-pattern-5s-v1'],
+    ['La nave tenía 32 unidades de combustible y usó 14. ¿Cuántas quedan?', 18, [16, 18, 20, 22], 'subtract', '32 − 14', 'puzzle-fuel-used-v1'],
+    ['Un planeta tiene 27 cráteres y otro 19. ¿Cuántos cráteres más tiene el primero?', 8, [6, 8, 9, 10], 'subtract', '27 − 19', 'puzzle-craters-difference-v1'],
+    ['Cada uno de 6 satélites tiene 4 paneles. ¿Cuántos paneles hay?', 24, [20, 22, 24, 28], 'multiply', '6 × 4', 'puzzle-satellite-panels-v1'],
+    ['Hay 5 cajas con 7 rocas lunares en cada una. ¿Cuántas rocas hay?', 35, [30, 32, 35, 40], 'multiply', '5 × 7', 'puzzle-moon-boxes-v1'],
+    ['24 tanques pequeños se reparten por igual entre 6 módulos. ¿Cuántos recibe cada módulo?', 4, [3, 4, 5, 6], 'divide', '24 ÷ 6', 'puzzle-oxygen-share-v1'],
+    ['Se guardan 36 estrellas en cajas de 9. ¿Cuántas cajas se llenan?', 4, [3, 4, 5, 6], 'divide', '36 ÷ 9', 'puzzle-stars-crates-v1']
+];
+
+const FREE_REAL_PROBLEMS = [
+    ['Compras 3 jugos de $2.000. ¿Cuánto pagas?', 6000, [4000, 5000, 6000, 8000], 'multiply', '3 × 2.000', 'real-juice-cost-v1'],
+    ['Tienes $10.000 y gastas $3.500. ¿Cuánto queda?', 6500, [5500, 6000, 6500, 7000], 'subtract', '10.000 − 3.500', 'real-money-change-v1'],
+    ['12 galletas entre 4 personas. ¿Cuántas recibe cada una?', 3, [2, 3, 4, 6], 'divide', '12 ÷ 4', 'real-cookies-share-v1'],
+    ['Cada cuaderno cuesta $3.000. ¿Cuánto cuestan 4 cuadernos?', 12000, [9000, 11000, 12000, 14000], 'multiply', '4 × 3.000', 'real-notebooks-cost-v1'],
+    ['En un bus hay 45 pasajeros. En una parada bajan 18. ¿Cuántos quedan?', 27, [23, 27, 33, 37], 'subtract', '45 − 18', 'real-bus-seats-v1'],
+    ['Se empacan 32 manzanas por igual en 4 bolsas. ¿Cuántas van en cada bolsa?', 8, [6, 7, 8, 9], 'divide', '32 ÷ 4', 'real-apples-share-v1'],
+    ['Una caja trae 6 botellas. ¿Cuántas botellas hay en 5 cajas?', 30, [25, 28, 30, 35], 'multiply', '5 × 6', 'real-water-bottles-v1'],
+    ['Tienes $20.000 y compras fruta por $8.500. ¿Cuánto dinero te queda?', 11500, [10500, 11500, 12500, 13500], 'subtract', '20.000 − 8.500', 'real-market-budget-v1'],
+    ['Se reparten 42 tarjetas por igual entre 7 equipos. ¿Cuántas recibe cada equipo?', 6, [5, 6, 7, 8], 'divide', '42 ÷ 7', 'real-team-sharing-v1']
+];
+
+const FREE_QUESTION_EXPLANATIONS = {
+    'puzzle-pattern-2s-v1': 'El patrón aumenta de 2 en 2; después de 8 sigue 10.',
+    'puzzle-stars-gift-v1': 'Al regalar 5 de las 14 estrellas, calculas 14 − 5 = 9.',
+    'puzzle-rockets-groups-v1': 'Tres grupos de 4 forman 3 × 4 = 12 estrellas.',
+    'puzzle-crystals-share-v1': 'Al repartir 18 entre 3, cada astronauta recibe 6.',
+    'puzzle-pattern-3s-v1': 'La secuencia aumenta de 3 en 3: 12 + 3 = 15.',
+    'puzzle-pattern-5s-v1': 'La secuencia aumenta de 5 en 5: 15 + 5 = 20.',
+    'puzzle-fuel-used-v1': 'Restas las 14 unidades usadas: 32 − 14 = 18.',
+    'puzzle-craters-difference-v1': 'La diferencia entre las cantidades es 27 − 19 = 8.',
+    'puzzle-satellite-panels-v1': 'Seis grupos de 4 paneles son 6 × 4 = 24.',
+    'puzzle-moon-boxes-v1': 'Cinco grupos de 7 rocas son 5 × 7 = 35.',
+    'puzzle-oxygen-share-v1': 'Al repartir 24 entre 6 módulos, cada uno recibe 4.',
+    'puzzle-stars-crates-v1': '36 dividido en cajas de 9 llena 4 cajas.',
+    'real-juice-cost-v1': 'Tres jugos de $2.000 cuestan 3 × 2.000 = $6.000.',
+    'real-money-change-v1': 'El cambio es 10.000 − 3.500 = $6.500.',
+    'real-cookies-share-v1': '12 galletas entre 4 personas son 3 para cada una.',
+    'real-notebooks-cost-v1': 'Cuatro cuadernos cuestan 4 × 3.000 = $12.000.',
+    'real-bus-seats-v1': 'Quedan 45 − 18 = 27 pasajeros.',
+    'real-apples-share-v1': '32 manzanas entre 4 bolsas son 8 por bolsa.',
+    'real-water-bottles-v1': 'Cinco cajas de 6 contienen 5 × 6 = 30 botellas.',
+    'real-market-budget-v1': 'Después de comprar, quedan 20.000 − 8.500 = $11.500.',
+    'real-team-sharing-v1': '42 tarjetas entre 7 equipos son 6 para cada equipo.'
+};
+
+function ensureFreeQuestionIds(bank, namespace) {
+    const usedIds = new Set();
+    bank.forEach((question, index) => {
+        const savedId = Array.isArray(question) ? question[5] : question.id;
+        let id = typeof savedId === 'string' && savedId.trim() ? savedId : '';
+        if (!id || usedIds.has(id)) {
+            id = `free-${namespace}-legacy-${index + 1}`;
+            while (usedIds.has(id)) id += '-';
+            if (Array.isArray(question)) question[5] = id;
+            else question.id = id;
+        }
+        usedIds.add(id);
+    });
+}
+
+function selectFreeQuestion(bank, operation) {
+    ensureFreeQuestionIds(bank, bank === FREE_PUZZLES ? 'puzzle' : 'real');
+    const questions = bank.map(question => Array.isArray(question) ? {
+        prompt: question[0], answer: question[1], choices: question[2],
+        operation: question[3], expression: question[4], id: question[5]
+    } : question);
+    const user = currentUser();
+    const history = user?.progress?.freeQuestionHistory;
+    const answered = new Set(history?.answered || []);
+    const eligible = questions.filter(question => (!operation || question.operation === operation)
+        && !answered.has(question.id));
+    if (!eligible.length) return null;
+    const shown = new Set(history?.shown || []);
+    const unseen = eligible.filter(question => !shown.has(question.id));
+    const question = randomItem(unseen.length ? unseen : eligible);
+    if (user && history) {
+        history.shown = [...new Set([...history.shown, question.id])];
+        saveDB();
+    }
+    return question;
+}
+
+function markFreeQuestionAnswered(question) {
+    const history = currentUser()?.progress?.freeQuestionHistory;
+    if (!history || history.answered.includes(question.id)) return false;
+    history.answered.push(question.id);
+    saveDB();
+    return true;
+}
+
+async function finishServerFreeAttempt() {
+    const active = serverAttempt;
+    if (!active?.answered || active.finished || active.finishing) return active?.finished === true;
+    active.finishing = true;
+    try {
+        await runSafeServerRetry(() => authClient.finishAttempt(active.id));
+        active.finished = true;
+        try { await refreshServerProgress(); updateMiniStats(serverAppUser); }
+        catch (error) { if (error.status === 401) return false; }
+        return true;
+    } catch (error) {
+        active.finishing = false;
+        if (error.status === 401) lockServerLearningApp('La sesión expiró o fue revocada. Inicia sesión otra vez.');
+        return false;
+    } finally {
+        active.finishing = false;
+    }
+}
+
+async function loadServerFreeQuestion(category, operation) {
+    if (serverAttempt?.answered && !serverAttempt.finished) {
+        const finished = await finishServerFreeAttempt();
+        if (!finished) {
+            const retryButton = category === 'puzzle' ? $('#newPuzzle') : $('#newRealQuestion');
+            retryButton.textContent = 'Reintentar cierre';
+            const feedback = category === 'puzzle' ? $('#puzzleFeedback') : $('#realFeedback');
+            feedback.textContent = 'La respuesta quedó guardada. Reintenta cerrar esta actividad antes de pedir otra.';
+            feedback.className = 'feedback bad';
+            return;
+        }
+        const retryButton = category === 'puzzle' ? $('#newPuzzle') : $('#newRealQuestion');
+        retryButton.textContent = category === 'puzzle' ? 'Otro rompecabezas' : 'Otro ejercicio';
+    }
+    if (serverAttempt?.conflict) {
+        try { await refreshServerProgress(); } catch { return; }
+    }
+    serverAttempt = null;
+    const idempotencyKey = uid();
+    let attempt;
+    try {
+        attempt = await runSafeServerRetry(() => authClient.startAttempt({
+            mode: category, idempotencyKey, ...(operation ? { operation } : {})
+        }));
+    } catch (error) {
+        if (error.status === 401) return lockServerLearningApp('La sesión expiró o fue revocada. Inicia sesión otra vez.');
+        const feedback = category === 'puzzle' ? $('#puzzleFeedback') : $('#realFeedback');
+        feedback.textContent = error.message || 'No se pudo obtener una pregunta del servidor.';
+        feedback.className = 'feedback bad';
+        return;
+    }
+    if (attempt.exhausted) {
+        const question = category === 'puzzle' ? $('#puzzleQuestion') : $('#realQuestion');
+        const options = category === 'puzzle' ? $('#puzzleOptions') : $('#realOptions');
+        const feedback = category === 'puzzle' ? $('#puzzleFeedback') : $('#realFeedback');
+        question.textContent = category === 'puzzle'
+            ? 'Completaste el banco de rompecabezas disponible para esta actividad. Pronto habrá contenido nuevo.'
+            : 'Completaste el banco de situaciones cotidianas disponible. Pronto habrá contenido nuevo.';
+        options.innerHTML = '';
+        feedback.textContent = '';
+        return;
+    }
+    const question = attempt.questions?.[0];
+    if (!question || typeof question.id !== 'string' || !Array.isArray(question.options)) {
+        const feedback = category === 'puzzle' ? $('#puzzleFeedback') : $('#realFeedback');
+        feedback.textContent = 'El servidor devolvió una pregunta no válida.';
+        feedback.className = 'feedback bad';
+        return;
+    }
+    serverAttempt = { id: attempt.attemptId, mode: category, question, answered: false, finished: false };
+    const prompt = category === 'puzzle' ? $('#puzzleQuestion') : $('#realQuestion');
+    const feedback = category === 'puzzle' ? $('#puzzleFeedback') : $('#realFeedback');
+    const options = category === 'puzzle' ? $('#puzzleOptions') : $('#realOptions');
+    prompt.textContent = question.prompt;
+    feedback.textContent = '';
+    feedback.className = 'feedback';
+    options.innerHTML = question.options.map((value, index) =>
+        `<button type="button" class="answer-option" data-option-index="${index}">${Number(value).toLocaleString('es-CO')}</button>`
+    ).join('');
+    options.querySelectorAll('.answer-option').forEach(button => {
+        button.onclick = () => submitServerFreeAnswer(category, Number(button.dataset.optionIndex), button);
+    });
+}
+
+async function submitServerFreeAnswer(category, selectedOption, selectedButton) {
+    const active = serverAttempt;
+    if (!active || active.mode !== category || active.answered || active.pending) return;
+    active.pending = true;
+    active.selectedOption = selectedOption;
+    const feedback = category === 'puzzle' ? $('#puzzleFeedback') : $('#realFeedback');
+    const options = category === 'puzzle' ? $('#puzzleOptions') : $('#realOptions');
+    options.querySelectorAll('button').forEach(button => { button.disabled = true; });
+    feedback.textContent = 'Enviando la respuesta al servidor…';
+    feedback.className = 'feedback';
+    let response;
+    try {
+        const answerPayload = {
+            attemptId: active.id, questionId: active.question.id, selectedOption
+        };
+        response = await runSafeServerRetry(() => authClient.answerAttemptOnce(answerPayload));
+    } catch (error) {
+        active.pending = false;
+        if (error.status === 401) return lockServerLearningApp('La sesión expiró o fue revocada. Inicia sesión otra vez.');
+        if (error.status === 409 || error.status === 404) {
+            active.conflict = true;
+            feedback.textContent = 'Esta pregunta ya fue respondida o el intento dejó de estar disponible. Actualiza para continuar.';
+            feedback.className = 'feedback bad';
+            return;
+        }
+        feedback.textContent = 'No pudimos confirmar la respuesta. Pulsa la misma opción otra vez para consultar el resultado guardado.';
+        feedback.className = 'feedback bad';
+        selectedButton.disabled = false;
+        selectedButton.onclick = () => submitServerFreeAnswer(category, active.selectedOption, selectedButton);
+        return;
+    }
+    active.pending = false;
+    active.answered = true;
+    let progressConfirmed = false;
+    try { await refreshServerProgress(); updateMiniStats(serverAppUser); progressConfirmed = true; }
+    catch (error) { if (error.status === 401) return; }
+    const correct = response.correct === true;
+    const explanation = response.explanation || '';
+    const answerText = Number(response.correctAnswer).toLocaleString('es-CO');
+    options.querySelectorAll('.answer-option').forEach((button, index) => {
+        if (Number(active.question.options[index]) === Number(response.correctAnswer)) button.classList.add('correct');
+        if (index === selectedOption && !correct) button.classList.add('wrong');
+    });
+    const intro = category === 'puzzle' ? '¡Rompecabezas resuelto!' : '¡Aplicaste las matemáticas a la vida real!';
+    feedback.textContent = correct
+        ? `${intro} ${explanation} ${progressConfirmed ? 'El progreso y los XP se confirmaron en el servidor.' : 'La respuesta fue aceptada, pero no se pudo actualizar el total de XP.'}`
+        : `La respuesta correcta era ${answerText}. ${explanation}`;
+    feedback.className = `feedback ${correct ? 'good' : 'bad'}`;
+    playMelody(correct);
+    speak(feedback.textContent);
+    const finished = await finishServerFreeAttempt();
+    if (!finished) {
+        const retryButton = category === 'puzzle' ? $('#newPuzzle') : $('#newRealQuestion');
+        retryButton.textContent = 'Reintentar cierre';
+        feedback.textContent += ' La respuesta quedó guardada; pulsa el botón para reintentar el cierre antes de continuar.';
+        feedback.className = 'feedback bad';
+    }
+}
+
 function newPuzzle(operation) {
-    const puzzles = [
-        ['Completa el patrón: 2, 4, 6, 8, ...', 10, [9, 10, 11, 12], 'add', '2 + 2 + 2 + 2 + 2'],
-        ['Tenías 14 estrellas y regalaste 5. ¿Cuántas quedan?', 9, [7, 8, 9, 10], 'subtract', '14 − 5'],
-        ['Tres cohetes llevan 4 estrellas cada uno. ¿Cuántas estrellas transportan?', 12, [8, 12, 16, 20], 'multiply', '3 × 4'],
-        ['18 cristales se reparten entre 3 astronautas. ¿Cuántos recibe cada uno?', 6, [5, 6, 7, 9], 'divide', '18 ÷ 3']
-    ];
-    const eligiblePuzzles = operation ? puzzles.filter(puzzle => puzzle[3] === operation) : puzzles;
-    const puzzle = randomItem(eligiblePuzzles);
-    $('#puzzleQuestion').textContent = puzzle[0];
+    if (!localDemoMode) {
+        loadServerFreeQuestion('puzzle', operation);
+        return;
+    }
+    const puzzle = selectFreeQuestion(FREE_PUZZLES, operation);
+    if (!puzzle) {
+        $('#puzzleQuestion').textContent = 'Completaste el banco de rompecabezas disponible para esta actividad. Pronto habrá contenido nuevo.';
+        $('#puzzleFeedback').textContent = '';
+        $('#puzzleOptions').innerHTML = '';
+        return;
+    }
+    $('#puzzleQuestion').textContent = puzzle.prompt;
+    const explanation = FREE_QUESTION_EXPLANATIONS[puzzle.id] || `Puedes comprobarlo con ${puzzle.expression || puzzle.prompt}.`;
     $('#puzzleFeedback').textContent = '';
     $('#puzzleFeedback').className = 'feedback';
-    $('#puzzleOptions').innerHTML = puzzle[2].map(v => `<button type="button" class="answer-option">${v}</button>`).join('');
+    $('#puzzleOptions').innerHTML = puzzle.choices.map(v => `<button type="button" class="answer-option">${v}</button>`).join('');
 
-    const activityId = uid();
+    const activityId = `free:${puzzle.id}`;
     let answered = false;
     $$('#puzzleOptions .answer-option').forEach(button => {
         button.onclick = () => {
             if (answered) return; // one attempt per puzzle: no farming by clicking repeatedly
             answered = true;
 
-            const correct = Number(button.textContent) === puzzle[1];
+            const correct = Number(button.textContent) === puzzle.answer;
             $$('#puzzleOptions .answer-option').forEach(option => {
                 option.disabled = true;
-                if (Number(option.textContent) === puzzle[1]) option.classList.add('correct');
+                if (Number(option.textContent) === puzzle.answer) option.classList.add('correct');
             });
             if (!correct) button.classList.add('wrong');
 
             playMelody(correct);
             const user = currentUser();
+            markFreeQuestionAnswered(puzzle);
             const gamificationMessages = recordLearningActivity(user, {
                 activityId,
-                operation: puzzle[3],
+                operation: puzzle.operation,
                 correct,
                 source: 'puzzle',
                 level: 1,
-                expression: puzzle[4] || puzzle[0],
+                expression: puzzle.expression || puzzle.prompt,
                 studentAnswer: button.textContent,
-                correctAnswer: puzzle[1]
+                correctAnswer: puzzle.answer
             });
             announceGamification(user, gamificationMessages);
             if (correct && user?.progress) {
@@ -2559,8 +3353,8 @@ function newPuzzle(operation) {
                 saveDB();
             }
             const feedbackMessage = correct
-                ? `¡Rompecabezas resuelto! ${gamificationMessages.join(' ')}`.trim()
-                : `No es la respuesta correcta. ${nextSupportMessage()} ${OPERATION_LEARNING_GUIDES[puzzle[3]].activity} La respuesta correcta era ${puzzle[1]}.`;
+                ? `¡Rompecabezas resuelto! ${explanation} ${gamificationMessages.join(' ')}`.trim()
+                : `No es la respuesta correcta. ${nextSupportMessage()} ${OPERATION_LEARNING_GUIDES[puzzle.operation].activity} La respuesta correcta era ${puzzle.answer}. ${explanation}`;
             $('#puzzleFeedback').textContent = feedbackMessage;
             $('#puzzleFeedback').className = `feedback ${correct ? 'good' : 'bad'}`;
             speak(feedbackMessage);
@@ -2569,41 +3363,49 @@ function newPuzzle(operation) {
 }
 
 function newReal() {
-    const problem = randomItem([
-        ['Compras 3 jugos de $2.000. ¿Cuánto pagas?', 6000, [4000, 5000, 6000, 8000], 'multiply'],
-        ['Tienes $10.000 y gastas $3.500. ¿Cuánto queda?', 6500, [5500, 6000, 6500, 7000], 'subtract'],
-        ['12 galletas entre 4 personas. ¿Cuántas recibe cada una?', 3, [2, 3, 4, 6], 'divide']
-    ]);
-    $('#realQuestion').textContent = problem[0];
+    if (!localDemoMode) {
+        loadServerFreeQuestion('real-problem');
+        return;
+    }
+    const problem = selectFreeQuestion(FREE_REAL_PROBLEMS);
+    if (!problem) {
+        $('#realQuestion').textContent = 'Completaste el banco de situaciones cotidianas disponible. Pronto habrá contenido nuevo.';
+        $('#realFeedback').textContent = '';
+        $('#realOptions').innerHTML = '';
+        return;
+    }
+    $('#realQuestion').textContent = problem.prompt;
+    const explanation = FREE_QUESTION_EXPLANATIONS[problem.id] || `Puedes comprobarlo con ${problem.expression || problem.prompt}.`;
     $('#realFeedback').textContent = '';
     $('#realFeedback').className = 'feedback';
-    $('#realOptions').innerHTML = problem[2].map(v => `<button type="button" class="answer-option">${v.toLocaleString('es-CO')}</button>`).join('');
+    $('#realOptions').innerHTML = problem.choices.map(v => `<button type="button" class="answer-option">${v.toLocaleString('es-CO')}</button>`).join('');
 
-    const activityId = uid();
+    const activityId = `free:${problem.id}`;
     let answered = false;
     $$('#realOptions .answer-option').forEach((button, index) => {
         button.onclick = () => {
             if (answered) return; // one attempt per problem: no farming by clicking repeatedly
             answered = true;
 
-            const correct = problem[2][index] === problem[1];
+            const correct = problem.choices[index] === problem.answer;
             $$('#realOptions .answer-option').forEach((option, i) => {
                 option.disabled = true;
-                if (problem[2][i] === problem[1]) option.classList.add('correct');
+                if (problem.choices[i] === problem.answer) option.classList.add('correct');
             });
             if (!correct) button.classList.add('wrong');
 
             playMelody(correct);
             const user = currentUser();
+            markFreeQuestionAnswered(problem);
             const gamificationMessages = recordLearningActivity(user, {
                 activityId,
-                operation: problem[3],
+                operation: problem.operation,
                 correct,
                 source: 'real-problem',
                 level: 1,
-                expression: problem[4] || problem[0],
-                studentAnswer: problem[2][index],
-                correctAnswer: problem[1]
+                expression: problem.expression || problem.prompt,
+                studentAnswer: problem.choices[index],
+                correctAnswer: problem.answer
             });
             announceGamification(user, gamificationMessages);
             if (correct && user?.progress) {
@@ -2611,8 +3413,8 @@ function newReal() {
                 saveDB();
             }
             const feedbackMessage = correct
-                ? `¡Aplicaste las matemáticas a la vida real! ${gamificationMessages.join(' ')}`.trim()
-                : `No es la respuesta correcta. ${nextSupportMessage()} ${OPERATION_LEARNING_GUIDES[problem[3]].activity} La respuesta correcta era ${problem[1].toLocaleString('es-CO')}.`;
+                ? `¡Aplicaste las matemáticas a la vida real! ${explanation} ${gamificationMessages.join(' ')}`.trim()
+                : `No es la respuesta correcta. ${nextSupportMessage()} ${OPERATION_LEARNING_GUIDES[problem.operation].activity} La respuesta correcta era ${problem.answer.toLocaleString('es-CO')}. ${explanation}`;
             $('#realFeedback').textContent = feedbackMessage;
             $('#realFeedback').className = `feedback ${correct ? 'good' : 'bad'}`;
             speak(feedbackMessage);
@@ -2666,28 +3468,12 @@ function setupApp() {
     });
 
     const mathSubjectButton = $('#mathSubjectButton');
-    const englishSubjectButton = $('#englishSubjectButton');
     const freeMathContent = $('#freeMathContent');
-    const englishSubjectNotice = $('#englishSubjectNotice');
     mathSubjectButton?.addEventListener('click', () => {
         freeMathContent?.classList.remove('hidden');
-        englishSubjectNotice?.classList.add('hidden');
         mathSubjectButton.setAttribute('aria-expanded', 'true');
         mathSubjectButton.setAttribute('aria-pressed', 'true');
-        englishSubjectButton?.setAttribute('aria-expanded', 'false');
-        englishSubjectButton?.setAttribute('aria-pressed', 'false');
         mathSubjectButton.classList.add('selected');
-        englishSubjectButton?.classList.remove('selected');
-    });
-    englishSubjectButton?.addEventListener('click', () => {
-        freeMathContent?.classList.add('hidden');
-        englishSubjectNotice?.classList.remove('hidden');
-        mathSubjectButton?.setAttribute('aria-expanded', 'false');
-        mathSubjectButton?.setAttribute('aria-pressed', 'false');
-        englishSubjectButton.setAttribute('aria-expanded', 'true');
-        englishSubjectButton.setAttribute('aria-pressed', 'true');
-        mathSubjectButton?.classList.remove('selected');
-        englishSubjectButton.classList.add('selected');
     });
 
     // Auth Tabs
@@ -2763,7 +3549,29 @@ function setupApp() {
         if (button) beginRecommendedPractice(button.dataset.learningPractice);
     });
     
-    $('#logoutButton').onclick = () => {
+    $('#logoutButton').onclick = async () => {
+        if (!localDemoMode && serverAppUser) {
+            const button = $('#logoutButton');
+            button.disabled = true;
+            try {
+                await authClient.logout();
+                serverAppUser = null;
+                serverAuthUser = null;
+                serverProgressSnapshot = null;
+                serverAttempt = null;
+                if (quizState?.serverSide) quizState = null;
+                setServerAuthStatus('Sesión cerrada. Puedes volver a iniciar sesión con Google.');
+                $('#googleButton')?.classList.remove('hidden');
+                $('#serverLogoutButton')?.classList.remove('hidden');
+                navigate('auth');
+            } catch (error) {
+                if (error.status === 401) lockServerLearningApp('La sesión ya estaba cerrada.');
+                else toast('No se pudo confirmar el cierre de sesión. Inténtalo de nuevo.');
+            } finally {
+                button.disabled = false;
+            }
+            return;
+        }
         if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch {} }
         clearInterval(timerId); timerId = null;
         resetMathTutorConversation();
@@ -2792,6 +3600,40 @@ function setupApp() {
     };
     
     $('#greetingButton').onclick = () => { unlockAudio(); greeting(); };
+
+    $('#continueLearningButton').onclick = () => {
+        const user = currentUser();
+        if (!user || user.role !== 'student') return;
+
+        if (!user.premium) {
+            $('#mathSubjectButton')?.click();
+            requestAnimationFrame(() => $('#freeMathTitle')?.scrollIntoView({
+                behavior: motionReduced() ? 'auto' : 'smooth',
+                block: 'start'
+            }));
+            return;
+        }
+
+        const nextOperation = operationKeys.find(operation => user.progress?.operations?.[operation]?.completed !== true);
+        if (nextOperation) {
+            const missionButton = $(`#operationPath [data-operation="${nextOperation}"]`);
+            if (missionButton && !missionButton.disabled) {
+                missionButton.click();
+                return;
+            }
+            toast('Completa y aprueba la unidad anterior para continuar.');
+            renderHome();
+            return;
+        }
+
+        const allOperationsComplete = operationKeys.every(operation => user.progress?.operations?.[operation]?.completed === true);
+        if (allOperationsComplete && user.progress?.assessment?.completed !== true) {
+            const evaluationButton = $('#evaluationButton');
+            if (evaluationButton && !evaluationButton.disabled) {
+                evaluationButton.click();
+            }
+        }
+    };
 
     const videoVolume = $('#videoVolume');
     const videoMuteButton = $('#videoMuteButton');
@@ -2948,6 +3790,17 @@ function setupApp() {
     $('#answerForm').onsubmit = e => {
         e.preventDefault(); unlockAudio();
         const typed = $('#writtenAnswer').value.trim();
+        if (quizState?.serverSide) {
+            const typedIndex = typed === '' ? -1 : quizState.question.options.findIndex(option => Number(option) === Number(typed));
+            const optionIndex = typedIndex >= 0 ? typedIndex : selectedAnswer;
+            if (!Number.isInteger(optionIndex) || optionIndex < 0) {
+                $('#feedback').textContent = 'Selecciona una de las opciones que envió el servidor.';
+                $('#feedback').className = 'feedback bad';
+                return;
+            }
+            checkAnswer(optionIndex);
+            return;
+        }
         const value = typed !== '' ? Number(typed) : selectedAnswer;
         if (value === null || value === undefined || Number.isNaN(value)) {
             const message = `Selecciona o escribe una respuesta, ${currentUser().name}. Tómate tu tiempo.`;
@@ -2956,7 +3809,20 @@ function setupApp() {
         checkAnswer(value);
     };
     
-    $('#nextQuestion').onclick = () => { speechSynthesis.cancel(); quizState.index >= quizState.total ? finishQuiz() : nextQuizQuestion(); };
+    $('#nextQuestion').onclick = () => {
+        speechSynthesis.cancel();
+        if (quizState?.serverSide && quizState.serverConflict) {
+            refreshServerProgress().catch(() => {});
+            navigate('home');
+            return;
+        }
+        if (quizState?.serverSide && quizState.question?.answerError) {
+            quizState.question.answerError = false;
+            submitServerQuizAnswer(quizState.question.pendingOption);
+            return;
+        }
+        quizState.index >= quizState.total ? finishQuiz() : nextQuizQuestion();
+    };
 
     // Dashboard Excel
     $('#excelButton').onclick = () => {
@@ -3002,17 +3868,22 @@ function setupApp() {
 // ==========================================
 // 9. INITIALIZE
 // ==========================================
-loadDB();
-const savedSession = sessionGet('ttl_ultimate_user');
-if (savedSession && db.users.some(u => u.id === savedSession)) {
-    userId = savedSession;
-    applyDailyReset(currentUser());
-    setupApp();
-    navigate('home');
+if (localDemoMode) {
+    loadDB();
+    const savedSession = sessionGet('ttl_ultimate_user');
+    if (savedSession && db.users.some(u => u.id === savedSession)) {
+        userId = savedSession;
+        applyDailyReset(currentUser());
+        setupApp();
+        navigate('home');
+    } else {
+        sessionRemove('ttl_ultimate_user');
+        setupApp();
+        navigate('auth');
+    }
 } else {
-    sessionRemove('ttl_ultimate_user');
-    setupApp();
     navigate('auth');
+    initializeServerAuth();
 }
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

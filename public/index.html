@@ -4,14 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#100736">
-    <meta name="description" content="Plataforma educativa espacial de matemáticas e inglés para grado tercero">
+    <meta name="description" content="Plataforma educativa espacial de matemáticas para grado tercero">
     <meta name="ttl-assets-root" content="assets">
     <meta name="ttl-math-tutor-api" content="https://technology-to-learn.vercel.app/api/math-tutor">
     <title>Technology to Learn SAS</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="assets/cosmo.jpg">
-    <link rel="stylesheet" href="css/estilos.css?v=78">
+    <link rel="stylesheet" href="css/estilos.css?v=80">
     <script>window.TTL_GOOGLE_CLIENT_ID = '860708338420-qaggph9h0vc3n9m7t1upbthkmiskjtvk.apps.googleusercontent.com';</script>
     <script src="https://accounts.google.com/gsi/client" async defer onload="window.dispatchEvent(new Event('google-ready'))"></script>
 </head>
@@ -78,8 +78,6 @@
                         <input id="loginPassword" type="password" value="123456" minlength="6" required>
                     </label>
                     <button type="submit" class="primary">Entrar a la nave</button>
-                    <div class="auth-divider"><span>o continúa con</span></div>
-                    <div id="googleButton" class="google-button" aria-label="Acceder con Google"></div>
                 </form>
 
                 <form id="registerForm" class="form hidden">
@@ -109,6 +107,12 @@
                 </form>
                 
                 <p id="authMessage" class="message" aria-live="polite"></p>
+                <section id="serverAuthPanel" class="server-auth-panel hidden" aria-labelledby="serverAuthTitle">
+                    <h2 id="serverAuthTitle">Acceso seguro</h2>
+                    <p id="serverAuthStatus" role="status" aria-live="polite">Comprobando el servicio de autenticación…</p>
+                    <div id="googleButton" class="google-button hidden" aria-label="Acceder con Google"></div>
+                    <button id="serverLogoutButton" class="secondary hidden" type="button">Cerrar sesión segura</button>
+                </section>
             </div>
         </section>
 
@@ -123,7 +127,11 @@
                     <p class="eyebrow">CENTRO DE MANDO</p>
                     <h2 id="welcomeTitle"></h2>
                     <p id="welcomeSubtitle"></p>
-                    <button id="greetingButton" class="secondary">🔊 Escuchar saludo</button>
+                    <div class="welcome-actions">
+                        <button id="continueLearningButton" class="primary" type="button">Continuar aprendiendo</button>
+                        <button id="greetingButton" class="secondary" type="button">🔊 Escuchar saludo</button>
+                    </div>
+                    <p id="continueLearningStatus" class="continue-learning-status" role="status"></p>
                 </div>
                 <div id="welcomeBubble" class="speech" aria-live="polite"></div>
             </div>
@@ -203,13 +211,7 @@
                         <span class="subject-copy"><b>Matemáticas</b><small id="mathSubjectSubtitle">Retos gratis · práctica y problemas</small></span>
                         <span class="subject-arrow" aria-hidden="true">›</span>
                     </button>
-                    <button id="englishSubjectButton" class="subject-card english" type="button" aria-controls="englishSubjectNotice" aria-expanded="false" aria-pressed="false">
-                        <span class="subject-icon english-icon" aria-hidden="true">EN</span>
-                        <span class="subject-copy"><b>Inglés</b><small>Una nueva materia</small></span>
-                        <span class="subject-arrow" aria-hidden="true">›</span>
-                    </button>
                 </div>
-                <p id="englishSubjectNotice" class="subject-notice hidden" role="status">Inglés está en preparación. Por ahora puedes practicar Matemáticas gratis.</p>
 
                 <section id="freeMathContent" class="subject-content free-math-content hidden" aria-labelledby="freeMathTitle">
                     <div class="free-math-heading">
@@ -457,6 +459,10 @@
                 <h2 id="summaryTitle">¡Misión completada!</h2>
                 <p id="summaryMessage"></p>
                 <div id="summaryStats" class="stats"></div>
+                <section id="sessionRewards" class="session-rewards hidden" aria-labelledby="sessionRewardsTitle" aria-live="polite">
+                    <h3 id="sessionRewardsTitle">Recompensas de esta misión</h3>
+                    <div id="sessionRewardsContent"></div>
+                </section>
                 <div id="assessmentBreakdown" class="assessment-breakdown hidden" aria-live="polite"></div>
                 <div class="button-row">
                     <button id="repeatMission" class="primary">Repetir misión</button>
@@ -689,6 +695,7 @@
     <div id="toast" aria-live="polite"></div>
 
     <!-- Ejecuta la aplicación desde un servidor local o web para reproducir los videos. -->
+    <script src="js/auth-client.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

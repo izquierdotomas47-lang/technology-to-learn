@@ -1793,7 +1793,8 @@ function renderHome() {
         renderMathGradeSummary(p);
         
         const activeStreak = currentLearningStreak(user);
-        $('#miniStats').textContent = `⭐ ${p.stars} · 🔥 ${activeStreak}`;
+        const currentLevel = levelProgress(p.gamification.xp).level;
+        $('#miniStats').textContent = `Nivel ${currentLevel} · ⭐ ${p.stars} · 🔥 ${activeStreak}`;
         $('#dailyStreakValue').textContent = `${activeStreak} ${activeStreak === 1 ? 'día' : 'días'}`;
         $('#dailyText').textContent = toNum(p.todayCorrect) >= 5
             ? `¡Meta diaria cumplida! (${p.todayCorrect} aciertos)`
@@ -2285,6 +2286,11 @@ function startQuiz(mode = 'practice') {
         started: Date.now(),
         sessionId: uid(),
         mode,
+        sessionProgressStart: {
+            xp: toNum(user.progress.gamification?.xp),
+            missionsCompleted: toNum(user.progress.gamification?.lifetime?.missionsCompleted),
+            earnedBadges: [...(user.progress.gamification?.earnedBadges || [])]
+        },
         questionLevel: practiceLevel,
         operationPlan,
         questionTypePlan,
@@ -2584,9 +2590,26 @@ function finishQuiz() {
     if (quizState.mode === 'assessment') {
         summaryValues.push(['4', 'operaciones'], [Math.round(elapsed / 60) + ' min', 'tiempo']);
     } else {
-        summaryValues.push(['+' + quizState.correct * 12, 'puntos'], ['+' + quizState.correct, 'estrellas'], [Math.round(elapsed / 60) + ' min', 'tiempo']);
+        const xpEarned = Math.max(0, toNum(p.gamification?.xp) - toNum(quizState.sessionProgressStart?.xp));
+        summaryValues.push(['+' + xpEarned, 'XP'], ['+' + quizState.correct * 12, 'puntos'], ['+' + quizState.correct, 'estrellas'], [Math.round(elapsed / 60) + ' min', 'tiempo']);
     }
     $('#summaryStats').innerHTML = statCards(summaryValues);
+    const sessionRewards = $('#sessionRewards');
+    const sessionRewardsContent = $('#sessionRewardsContent');
+    if (sessionRewards && sessionRewardsContent) {
+        const start = quizState.sessionProgressStart || {};
+        const xpEarned = Math.max(0, toNum(p.gamification?.xp) - toNum(start.xp));
+        const missionsEarned = Math.max(0, toNum(p.gamification?.lifetime?.missionsCompleted) - toNum(start.missionsCompleted));
+        const newBadges = (p.gamification?.earnedBadges || [])
+            .filter(id => !(start.earnedBadges || []).includes(id))
+            .map(id => GAMIFICATION_BADGES.find(badge => badge.id === id))
+            .filter(Boolean);
+        const hasRewards = quizState.mode === 'practice' && (xpEarned || missionsEarned || newBadges.length);
+        sessionRewards.classList.toggle('hidden', !hasRewards);
+        sessionRewardsContent.innerHTML = hasRewards
+            ? `<div class="session-reward-grid"><p><b>+${xpEarned} XP</b><span>avance real de esta sesión</span></p><p><b>${missionsEarned}</b><span>${missionsEarned === 1 ? 'misión completada' : 'misiones completadas'}</span></p>${newBadges.length ? `<p class="session-badges"><b>${newBadges.map(badge => `${badge.icon} ${escapeHTML(badge.title)}`).join(' · ')}</b><span>${newBadges.length === 1 ? 'nueva insignia' : 'nuevas insignias'}</span></p>` : ''}</div>`
+            : '';
+    }
     const breakdown = $('#assessmentBreakdown');
     if (breakdown) {
         breakdown.classList.toggle('hidden', quizState.mode !== 'assessment');

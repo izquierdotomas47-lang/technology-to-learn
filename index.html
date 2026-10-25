@@ -11,7 +11,7 @@
     
     <link rel="manifest" href="public/manifest.json">
     <link rel="icon" href="public/assets/cosmo.jpg">
-    <link rel="stylesheet" href="css/estilos.css?v=78">
+    <link rel="stylesheet" href="css/estilos.css?v=80">
     <script>window.TTL_GOOGLE_CLIENT_ID = '860708338420-qaggph9h0vc3n9m7t1upbthkmiskjtvk.apps.googleusercontent.com';</script>
     <script src="https://accounts.google.com/gsi/client" async defer onload="window.dispatchEvent(new Event('google-ready'))"></script>
 </head>
@@ -465,6 +465,10 @@
                 <h2 id="summaryTitle">¡Misión completada!</h2>
                 <p id="summaryMessage"></p>
                 <div id="summaryStats" class="stats"></div>
+                <section id="sessionRewards" class="session-rewards hidden" aria-labelledby="sessionRewardsTitle" aria-live="polite">
+                    <h3 id="sessionRewardsTitle">Recompensas de esta misión</h3>
+                    <div id="sessionRewardsContent"></div>
+                </section>
                 <div id="assessmentBreakdown" class="assessment-breakdown hidden" aria-live="polite"></div>
                 <div class="button-row">
                     <button id="repeatMission" class="primary">Repetir misión</button>
