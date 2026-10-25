@@ -24,6 +24,96 @@ const shuffle = items => {
 const appAssetRoot = document.querySelector('meta[name="ttl-assets-root"]')?.content || 'assets';
 const appAsset = path => `${appAssetRoot}/${path}`;
 
+const studentMusicTracks = [
+    'aberrantrealities-a-full-day-of-play-562091.mp3',
+    'good_b_music-cheerful-cinematic-song-without-solo-guitar-10709.mp3',
+    'instrumentalmusic-cheerful-1-439080.mp3',
+    'instrumentalmusic-ix27m-happy-439741.mp3',
+    'sub_clair-kids-581150.mp3',
+    'the_mountain-kid-action-375989.mp3'
+];
+let studentMusicQueue = [];
+let currentStudentMusicTrack = '';
+let studentMusicEnabled = true;
+let studentMusicErrorShown = false;
+
+function isStudentSessionActive() {
+    return currentUser()?.role === 'student' && $('#quiz')?.classList.contains('active');
+}
+
+function syncStudentMusicButton() {
+    const button = $('#musicButton');
+    if (!button) return;
+    button.textContent = studentMusicEnabled ? '🎵' : '🔇';
+    button.setAttribute('aria-pressed', String(studentMusicEnabled));
+    button.setAttribute('aria-label', studentMusicEnabled ? 'Silenciar música de fondo' : 'Activar música de fondo');
+    button.title = studentMusicEnabled ? 'Silenciar música de fondo' : 'Activar música de fondo';
+}
+
+function nextStudentMusicTrack() {
+    if (!studentMusicQueue.length) {
+        studentMusicQueue = shuffle(studentMusicTracks);
+        if (studentMusicQueue.length > 1 && studentMusicQueue[0] === currentStudentMusicTrack) {
+            [studentMusicQueue[0], studentMusicQueue[1]] = [studentMusicQueue[1], studentMusicQueue[0]];
+        }
+    }
+    currentStudentMusicTrack = studentMusicQueue.shift();
+    return currentStudentMusicTrack;
+}
+
+function playNextStudentMusicTrack() {
+    const audio = $('#studentMusic');
+    if (!audio || !studentMusicEnabled || !isStudentSessionActive()) return;
+    audio.pause();
+    audio.src = appAsset(`music/questions/${encodeURIComponent(nextStudentMusicTrack())}`);
+    audio.volume = 0.22;
+    audio.load();
+    const playback = audio.play();
+    if (playback?.then) playback.then(() => { studentMusicErrorShown = false; }).catch(showStudentMusicError);
+}
+
+function startStudentMusic() {
+    const audio = $('#studentMusic');
+    if (!audio || !studentMusicEnabled || !isStudentSessionActive()) return;
+    if (!audio.getAttribute('src') || audio.ended) {
+        playNextStudentMusicTrack();
+        return;
+    }
+    const playback = audio.play();
+    if (playback?.then) playback.then(() => { studentMusicErrorShown = false; }).catch(showStudentMusicError);
+}
+
+function showStudentMusicError(error) {
+    if (studentMusicErrorShown) return;
+    studentMusicErrorShown = true;
+    toast(error?.name === 'NotAllowedError'
+        ? 'Pulsa el botón 🎵 para iniciar la música.'
+        : 'No se pudo cargar una pista de música. Recarga la página e inténtalo de nuevo.');
+    console.warn('No se pudo reproducir la música de las preguntas.', error);
+}
+
+function stopStudentMusic(reset = false) {
+    const audio = $('#studentMusic');
+    if (!audio) return;
+    audio.pause();
+    if (reset) {
+        audio.removeAttribute('src');
+        audio.load();
+        currentStudentMusicTrack = '';
+        studentMusicQueue = [];
+    }
+}
+
+$('#studentMusic')?.addEventListener('ended', playNextStudentMusicTrack);
+document.addEventListener('pointerdown', event => {
+    if (event.target instanceof Element && event.target.closest('#musicButton')) return;
+    if (isStudentSessionActive() && studentMusicEnabled) startStudentMusic();
+}, { capture: true });
+document.addEventListener('keydown', event => {
+    if (event.target instanceof Element && event.target.closest('#musicButton')) return;
+    if (isStudentSessionActive() && studentMusicEnabled) startStudentMusic();
+}, { capture: true });
+
 const escapeHTML = v => {
     return String(v).replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -94,7 +184,9 @@ const navigate = id => {
     // Stop timers/voices that belong to the screen we are leaving
     if (id !== 'quiz' && timerId) { clearInterval(timerId); timerId = null; }
     if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch {} }
-    $$('video, audio').forEach(media => media.pause());
+    $$('video, audio').forEach(media => {
+        if (media.id !== 'studentMusic') media.pause();
+    });
     $$('.screen').forEach(x => x.classList.remove('active'));
     const target = $('#' + id);
     if (target) target.classList.add('active');
@@ -107,6 +199,11 @@ const navigate = id => {
     
     const header = $('#header');
     if (header) header.classList.toggle('hidden', id === 'auth');
+
+    const studentQuestionScreen = id === 'quiz' && currentUser()?.role === 'student';
+    $('#musicButton')?.classList.toggle('hidden', !studentQuestionScreen);
+    if (studentQuestionScreen) startStudentMusic();
+    else stopStudentMusic(id === 'auth');
 
     // Trigger render callbacks
     if (id === 'home') renderHome();
@@ -1727,6 +1824,8 @@ function renderHome() {
 
     $('#welcomeTitle').textContent = `¡Hola, ${user.name}!`;
     $('#audioButton').textContent = user.settings?.audio ? '🔊' : '🔇';
+    $('#musicButton')?.classList.add('hidden');
+    syncStudentMusicButton();
     
     $('#studentDashboard').classList.toggle('hidden', user.role !== 'student');
     $('#staffDashboard').classList.toggle('hidden', user.role === 'student');
@@ -3597,6 +3696,19 @@ function setupApp() {
         $('#audioButton').textContent = user.settings.audio ? '🔊' : '🔇';
         if (user.settings.audio) { playMelody(true); setTimeout(greeting, 350); }
         else if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch {} }
+    };
+
+    $('#musicButton').onclick = () => {
+        if (!isStudentSessionActive()) return;
+        const audio = $('#studentMusic');
+        if (studentMusicEnabled && audio && !audio.paused) {
+            studentMusicEnabled = false;
+            stopStudentMusic();
+        } else {
+            studentMusicEnabled = true;
+            startStudentMusic();
+        }
+        syncStudentMusicButton();
     };
     
     $('#greetingButton').onclick = () => { unlockAudio(); greeting(); };
